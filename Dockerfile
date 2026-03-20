@@ -3,7 +3,6 @@ FROM node:20-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
 RUN npm ci
@@ -18,9 +17,8 @@ COPY . .
 # Generate Prisma Client
 RUN npx prisma generate
 
-# Next.js telemetry
+# Build the Next.js app in standalone mode
 ENV NEXT_TELEMETRY_DISABLED 1
-
 RUN npm run build
 
 # Stage 3: Production image
@@ -33,21 +31,18 @@ RUN apk add --no-cache libc6-compat openssl curl
 ENV NODE_ENV production
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
 # Copy standalone build
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
-# Copy prisma for migrations/db
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-
-USER nextjs
+# IMPORTANT: Copy the generated prisma clients and their engines
+# These are often missed by Next.js standalone tracing when using multiple clients
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 EXPOSE 5002
 ENV PORT 5002
+ENV HOSTNAME 0.0.0.0
 
-# The standalone output requires this
 CMD ["node", "server.js"]
