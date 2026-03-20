@@ -9,9 +9,13 @@ RUN npm ci
 
 # Stage 2: Rebuild the source code
 FROM node:20-alpine AS builder
+RUN apk add --no-cache libc6-compat sed
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Switch Entities provider to postgresql for production
+RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/entities/schema.prisma
 
 # Generate Prisma clients for both schemas
 RUN npx prisma generate --schema=./prisma/system/schema.prisma
@@ -28,9 +32,6 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
-
-# Switch Entities provider to postgresql for production
-RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/entities/schema.prisma
 
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
