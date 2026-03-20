@@ -66,59 +66,34 @@ export class ODataClient {
   private config: ODataConfig;
 
   constructor(config: ODataConfig) {
-    // Normalize base URL to ensure it ends with /
     let url = config.baseUrl.trim();
     if (!url.endsWith('/')) url += '/';
-    
-    // In many Elise BI environments, it ends with odata/
-    // If not present, we can append it if it ends with ODataBi/
-    if (url.toLowerCase().endsWith('odatabi/')) {
-        url += 'odata/';
-    }
-    
+    if (url.toLowerCase().endsWith('odatabi/')) url += 'odata/';
     this.config = { ...config, baseUrl: url };
   }
 
-  private get authHeader(): string {
+  private getAuthHeader(): string {
     const str = `${this.config.username}:${this.config.password}`;
-    try {
-      // Correct way to handle UTF-8 for btoa (server explicitly asks for UTF-8 in realm)
-      const bytes = new TextEncoder().encode(str);
-      const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-      return `Basic ${btoa(binString)}`;
-    } catch (e) {
-    // Node environment check for Buffer vs Browser TextEncoder
     if (typeof window === 'undefined') {
-      // Using Buffer for Node.js environment
       return `Basic ${Buffer.from(str).toString('base64')}`;
     } else {
-      // Browser environment
       try {
-        // Correct way to handle UTF-8 for btoa (server explicitly asks for UTF-8 in realm)
         const bytes = new TextEncoder().encode(str);
         const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
         return `Basic ${btoa(binString)}`;
       } catch (e) {
-        // Fallback for primitive environments
         return `Basic ${btoa(str)}`;
       }
     }
   }
 
-  public async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const isAbsolute = path.startsWith('http://') || path.startsWith('https://');
-    const targetUrl = isAbsolute ? path : `${this.config.baseUrl}${path.startsWith('/') ? path.slice(1) : path}`;
+  public async fetchWithProxy(targetUrl: string, options: RequestInit = {}): Promise<Response> {
     const auth = this.getAuthHeader();
 
-    let response: Response;
-
-    // If we're in the browser, always use the proxy to avoid CORS
     if (typeof window !== 'undefined') {
-      response = await fetch('/api/odata-proxy', {
+      return fetch('/api/odata-proxy', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: targetUrl,
           method: options.method || 'GET',
@@ -131,8 +106,7 @@ export class ODataClient {
         }),
       });
     } else {
-      // Server-side or non-browser environment
-      response = await fetch(targetUrl, {
+      return fetch(targetUrl, {
         ...options,
         headers: {
           'Authorization': auth,
@@ -141,6 +115,13 @@ export class ODataClient {
         },
       });
     }
+  }
+
+  public async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const isAbsolute = path.startsWith('http://') || path.startsWith('https://');
+    const targetUrl = isAbsolute ? path : `${this.config.baseUrl}${path.startsWith('/') ? path.slice(1) : path}`;
+    
+    const response = await this.fetchWithProxy(targetUrl, options);
     
     if (!response.ok) {
       const errorText = await response.text();
@@ -148,43 +129,28 @@ export class ODataClient {
     }
 
     const text = await response.text();
-    let data;
     try {
-      data = JSON.parse(text);
+      return JSON.parse(text);
     } catch (err) {
       throw new Error(`Invalid JSON response from server. Check the URL. (Received: ${text.slice(0, 50)}...)`);
     }
-
-    return data;
   }
 
-  /**
-   * Fetches the service description (list of entity sets)
-   */
   async getCollections(): Promise<ODataResponse<{ name: string; kind: string; url: string }>> {
     return this.request('');
   }
 
-  /**
-   * Fetches the data for a specific entity set
-   */
   async getEntityData<T>(entity: string, query: string = ''): Promise<ODataResponse<T>> {
     const separator = query ? (query.startsWith('?') ? '' : '?') : '';
     return this.request(`${entity}${separator}${query}`);
   }
 
-  /**
-   * Fetches only the count for a specific entity set
-   */
   async getCount(entity: string): Promise<number> {
     try {
-      // Try with $count=true (standard v4)
       const separator = entity.includes('?') ? '&' : '?';
       const data = await this.request<any>(`${entity}${separator}$count=true&$top=0`);
       if (data['@odata.count'] !== undefined) return data['@odata.count'];
       
-      // Fallback: /$count (some implementations)
-      // We must insert /$count before the query string if present
       let countPath = entity;
       let queryStr = '';
       if (entity.includes('?')) {
@@ -201,9 +167,6 @@ export class ODataClient {
     }
   }
 
-  /**
-   * Fetches aggregated data using OData $apply
-   */
   async getAggregatedData<T>(entity: string, apply: string): Promise<T[]> {
     try {
       const data = await this.request<any>(`${entity}?$apply=${encodeURIComponent(apply)}`);
@@ -217,13 +180,7 @@ export class ODataClient {
 
   async getMetadata(): Promise<string> {
     const targetUrl = `${this.config.baseUrl}$metadata`;
-    
-    const response = await fetch(targetUrl, {
-      headers: {
-        'Authorization': this.authHeader,
-        'Accept': 'application/xml,application/json',
-      },
-    });
+    const response = await this.fetchWithProxy(targetUrl);
     if (!response.ok) throw new Error('Failed to fetch metadata');
     return response.text();
   }

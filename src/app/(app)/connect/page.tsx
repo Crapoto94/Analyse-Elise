@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ODataConfig } from '@/lib/odata';
+import { ODataClient, ODataConfig } from '@/lib/odata';
 
 export default function ConnectPage() {
   const router = useRouter();
@@ -46,32 +46,20 @@ export default function ConnectPage() {
     }
   };
 
-  const getAuthHeader = (u: string, p: string) => {
-    const str = `${u}:${p}`;
-    const bytes = new TextEncoder().encode(str);
-    const binString = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
-    return `Basic ${btoa(binString)}`;
-  };
-
   const handleTest = async () => {
     setError('');
     setTestSuccess(false);
     setTestLoading(true);
 
     try {
-      const auth = getAuthHeader(username, password);
-      const fetchUrl = baseUrl.endsWith('/') ? `${baseUrl}$metadata` : `${baseUrl}/$metadata`;
-      
-      const res = await fetch(fetchUrl, {
-        headers: {
-          'Authorization': auth
-        }
+      const client = new ODataClient({
+        baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+        username,
+        password
       });
 
-      if (!res.ok) {
-        throw new Error(`Erreur ${res.status}: ${res.statusText}`);
-      }
-
+      // Fetch metadata as a test (uses proxy internally if in browser)
+      await client.getMetadata();
       setTestSuccess(true);
     } catch (err: any) {
       setError(err.message);
