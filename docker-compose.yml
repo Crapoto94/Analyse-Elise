@@ -1,6 +1,22 @@
-version: '3.8'
+networks:
+  default:
+    name: odata-network
 
 services:
+  db:
+    image: postgres:16
+    container_name: odata-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_MULTIPLE_DATABASES=app_entities
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    ports:
+      - "5432:5432"
+
   app:
     build:
       context: .
@@ -9,11 +25,13 @@ services:
     restart: always
     ports:
       - "5002:5002"
+    depends_on:
+      - db
     volumes:
-      - ./data:/app/data
+      - ./system.db:/app/data/system.db
     environment:
       - DATABASE_URL_SYSTEM=file:/app/data/system.db
-      - DATABASE_URL_ENTITIES=file:/app/data/entities.db
+      - DATABASE_URL_ENTITIES=postgresql://postgres:postgres@db:5432/app_entities?schema=public
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
       - PORT=5002
@@ -24,7 +42,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
-networks:
-  default:
-    name: odata-network

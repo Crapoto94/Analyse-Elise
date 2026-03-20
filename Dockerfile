@@ -29,6 +29,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 
+# Switch Entities provider to postgresql for production
+RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/entities/schema.prisma
+
 ENV NODE_ENV production
 # Uncomment the following line in case you want to disable telemetry during runtime.
 # ENV NEXT_TELEMETRY_DISABLED 1
@@ -41,6 +44,9 @@ COPY --from=builder /app/public ./public
 # Set the correct permission for prerender cache
 RUN mkdir .next
 RUN chown nextjs:nodejs .next
+
+# Ensure data directory exists and is writable by nextjs user
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
 # Automatically leverage output traces to reduce image size
 # https://nextjs.org/docs/advanced-features/output-file-tracing

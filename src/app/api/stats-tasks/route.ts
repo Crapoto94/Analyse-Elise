@@ -7,13 +7,17 @@ export async function GET(req: Request) {
   const cabFilter = searchParams.get('cab'); // if "true", returns total for cabinet
 
   try {
+    const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
+    const p1 = isPostgres ? '$1' : '?';
+    const p2 = isPostgres ? '$2' : '?';
+
     if (cabFilter === 'true') {
       const query = `
         SELECT COUNT(*) as count 
         FROM "sync_FactTask" t
         JOIN "sync_FactDocument" d ON t."DocumentId" = d."Id"
         JOIN "sync_DimStructureElementPath" p ON t."AssignedToStructureElementId" = p."Id"
-        WHERE d."CreatedDate" >= ? AND d."CreatedDate" < ?
+        WHERE d."CreatedDate" >= ${p1} AND d."CreatedDate" < ${p2}
           AND d."CreatedDate" NOT LIKE '2019%'
           AND p."Level2" = 'CABINET DU MAIRE - ADJOINTS'
       `;
@@ -25,7 +29,7 @@ export async function GET(req: Request) {
         SELECT t."AssignedToStructureElementId" as id, COUNT(*) as count
         FROM "sync_FactTask" t
         JOIN "sync_FactDocument" d ON t."DocumentId" = d."Id"
-        WHERE d."CreatedDate" >= ? AND d."CreatedDate" < ?
+        WHERE d."CreatedDate" >= ${p1} AND d."CreatedDate" < ${p2}
           AND d."CreatedDate" NOT LIKE '2019%'
         GROUP BY t."AssignedToStructureElementId"
       `;

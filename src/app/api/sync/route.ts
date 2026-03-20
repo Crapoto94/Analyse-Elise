@@ -12,11 +12,11 @@ function tableNameFor(entity: string): string {
 /**
  * Introspect an object and return column definitions
  */
-function inferColumns(sample: Record<string, any>): { name: string; type: string }[] {
+function inferColumns(sample: Record<string, any>, isPostgres: boolean): { name: string; type: string }[] {
   return Object.entries(sample).map(([key, val]) => {
     if (val !== null && typeof val === 'object') return { name: key, type: 'TEXT' };
-    if (typeof val === 'number') return { name: key, type: 'REAL' };
-    if (typeof val === 'boolean') return { name: key, type: 'INTEGER' };
+    if (typeof val === 'number') return { name: key, type: isPostgres ? 'DOUBLE PRECISION' : 'REAL' };
+    if (typeof val === 'boolean') return { name: key, type: isPostgres ? 'BOOLEAN' : 'INTEGER' };
     return { name: key, type: 'TEXT' };
   });
 }
@@ -24,28 +24,36 @@ function inferColumns(sample: Record<string, any>): { name: string; type: string
 /**
  * Create table if not exists, then add any missing columns (IN ENTITIES DB)
  */
-async function ensureTable(tableName: string, cols: { name: string; type: string }[]): Promise<void> {
+async function ensureTable(tableName: string, cols: { name: string; type: string }[], isPostgres: boolean): Promise<void> {
   const colDefs = cols.map(c => `"${c.name}" ${c.type}`).join(', ');
-  await prismaEntities.$executeRawUnsafe(
-    `CREATE TABLE IF NOT EXISTS "${tableName}" (_id INTEGER PRIMARY KEY AUTOINCREMENT, _sync_date TEXT, ${colDefs})`
-  );
+  
+  if (isPostgres) {
+    await prismaEntities.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${tableName}" (_id SERIAL PRIMARY KEY, _sync_date TEXT, ${colDefs})`
+    );
+    try {
+      await prismaEntities.$executeRawUnsafe(
+        `ALTER TABLE "${tableName}" ADD CONSTRAINT "${tableName}_external_id_unique" UNIQUE ("_external_id")`
+      );
+    } catch (e) {}
+  } else {
+    await prismaEntities.$executeRawUnsafe(
+      `CREATE TABLE IF NOT EXISTS "${tableName}" (_id INTEGER PRIMARY KEY AUTOINCREMENT, _sync_date TEXT, ${colDefs})`
+    );
+    await prismaEntities.$executeRawUnsafe(
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${tableName}_external_id_unique" ON "${tableName}" ("_external_id")`
+    );
+  }
 
-  // Upgrade the old non-unique index to a UNIQUE INDEX for INSERT OR REPLACE
-  await prismaEntities.$executeRawUnsafe(`DROP INDEX IF EXISTS "idx_${tableName}_external_id"`);
-  await prismaEntities.$executeRawUnsafe(
-    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${tableName}_external_id_unique" ON "${tableName}" ("_external_id")`
-  );
-
-  const existingCols = (await prismaEntities.$queryRawUnsafe(
-    `PRAGMA table_info("${tableName}")`
-  )) as { name: string }[];
+  const existingCols = isPostgres 
+    ? (await prismaEntities.$queryRawUnsafe(`SELECT column_name as name FROM information_schema.columns WHERE table_name = '${tableName}'`)) as { name: string }[]
+    : (await prismaEntities.$queryRawUnsafe(`PRAGMA table_info("${tableName}")`)) as { name: string }[];
+    
   const existingNames = new Set(existingCols.map((c) => c.name));
 
   for (const col of cols) {
     if (!existingNames.has(col.name)) {
-      await prismaEntities.$executeRawUnsafe(
-        `ALTER TABLE "${tableName}" ADD COLUMN "${col.name}" ${col.type}`
-      );
+      await prismaEntities.$executeRawUnsafe(`ALTER TABLE "${tableName}" ADD COLUMN "${col.name}" ${col.type}`);
     }
   }
 }
@@ -53,22 +61,32 @@ async function ensureTable(tableName: string, cols: { name: string; type: string
 /**
  * Bulk upsert items (IN ENTITIES DB)
  */
-async function bulkUpsert(tableName: string, items: any[], allCols: { name: string; type: string }[]): Promise<void> {
-  const BATCH_SIZE = 500;
-  const colNamesStr = ['"_sync_date"', ...allCols.map(c => `"${c.name}"`)].join(', ');
-  const numParamsPerRow = allCols.length + 1;
+async function bulkUpsert(tableName: string, items: any[], allCols: { name: string; type: string }[], isPostgres: boolean): Promise<void> {
+  const BATCH_SIZE = isPostgres ? 100 : 500;
+  const colNames = ['_sync_date', ...allCols.map(c => c.name)];
+  const colNamesStr = colNames.map(n => `"${n}"`).join(', ');
+  
+  const updateSet = colNames
+    .filter(n => n !== '_external_id')
+    .map(n => isPostgres ? `"${n}" = EXCLUDED."${n}"` : `"${n}" = excluded."${n}"`)
+    .join(', ');
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const chunk = items.slice(i, i + BATCH_SIZE);
     const placeholders: string[] = [];
     const values: any[] = [];
     const nowStr = new Date().toISOString();
+    let paramCount = 1;
 
     for (const item of chunk) {
-      placeholders.push(`(${new Array(numParamsPerRow).fill('?').join(', ')})`);
+      const rowP: string[] = [];
+      
+      // _sync_date
+      rowP.push(isPostgres ? `$${paramCount++}::TEXT` : '?');
       values.push(nowStr);
 
       for (const col of allCols) {
+        rowP.push(isPostgres ? `$${paramCount++}::${col.type}` : '?');
         if (col.name === '_external_id') {
           values.push(item._external_id);
         } else {
@@ -76,10 +94,21 @@ async function bulkUpsert(tableName: string, items: any[], allCols: { name: stri
           values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
         }
       }
+      placeholders.push(`(${rowP.join(', ')})`);
     }
 
-    const query = `INSERT OR REPLACE INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')}`;
-    await prismaEntities.$executeRawUnsafe(query, ...values);
+    const query = isPostgres 
+      ? `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`
+      : `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`;
+      // Note: SQLite supports ON CONFLICT since 3.24.0, which works like Postgres. 
+      // UPSERT syntax is identical for simple cases.
+
+    try {
+      await prismaEntities.$executeRawUnsafe(query, ...values);
+    } catch (err: any) {
+      console.error(`[bulkUpsert] Error on ${tableName} (Postgres: ${isPostgres}):`, err.message);
+      throw err;
+    }
   }
 }
 
@@ -150,6 +179,8 @@ export async function POST(req: Request) {
       const entityStats: Record<string, number> = {};
       let totalCount = 0;
 
+      const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
+
       for (let i = 0; i < allEntities.length; i++) {
         const entity = allEntities[i];
         const tableName = tableNameFor(entity);
@@ -172,9 +203,9 @@ export async function POST(req: Request) {
                 }
               }
 
-              const cols = inferColumns(sampleMerged);
+              const cols = inferColumns(sampleMerged, !!isPostgres);
               const allCols = [{ name: '_external_id', type: 'TEXT' }, ...cols];
-              await ensureTable(tableName, allCols);
+              await ensureTable(tableName, allCols, !!isPostgres);
 
               for (let k = 0; k < items.length; k++) {
                 const item = items[k];
@@ -183,7 +214,7 @@ export async function POST(req: Request) {
                   : `row_${count + k}_${Math.random().toString(36).substr(2, 6)}`;
               }
 
-              await bulkUpsert(tableName, items, allCols);
+              await bulkUpsert(tableName, items, allCols, !!isPostgres);
               count += items.length;
             }
 

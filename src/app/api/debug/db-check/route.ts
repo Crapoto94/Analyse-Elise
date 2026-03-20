@@ -24,6 +24,14 @@ export async function GET() {
   for (const db of dbFiles) {
     if (db.env?.startsWith('file:')) {
       const filePath = db.env.replace('file:', '');
+      const dirPath = path.dirname(filePath);
+      
+      try {
+        if (fs.existsSync(dirPath)) {
+          diagnostics.files[`dir_${path.basename(dirPath)}`] = fs.readdirSync(dirPath);
+        }
+      } catch (e) {}
+
       try {
         const stats = fs.statSync(filePath);
         diagnostics.files[db.name] = {

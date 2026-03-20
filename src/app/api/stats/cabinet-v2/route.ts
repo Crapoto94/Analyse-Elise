@@ -19,9 +19,14 @@ export async function GET(req: Request) {
   const service = searchParams.get('service');
 
   try {
-    // 0a. Get all available years
+    const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
+    
+    const yearSql = isPostgres 
+      ? `EXTRACT(YEAR FROM CreatedDate::TIMESTAMP)::TEXT`
+      : `strftime('%Y', CreatedDate)`;
+
     const yearsRaw = await prismaEntities.$queryRawUnsafe(`
-      SELECT DISTINCT strftime('%Y', CreatedDate) as yr FROM sync_FactDocument WHERE yr IS NOT NULL AND yr != '2019'
+      SELECT DISTINCT ${yearSql} as yr FROM sync_FactDocument WHERE CreatedDate IS NOT NULL AND CreatedDate NOT LIKE '2019%'
     `) as any[];
     const availableYears = yearsRaw.map(y => parseInt(y.yr)).filter(y => !isNaN(y));
 
@@ -37,25 +42,45 @@ export async function GET(req: Request) {
       endDate = `${nextYear}-${nextMonth.toString().padStart(2, '0')}-01`;
     }
 
-    const dateFilter = `AND CreatedDate >= ? AND CreatedDate < ?`;
-    const dateFilterFd = `AND fd.CreatedDate >= ? AND fd.CreatedDate < ?`;
-    const dateFilterD = `AND d.CreatedDate >= ? AND d.CreatedDate < ?`;
+    const p1 = isPostgres ? '$1' : '?';
+    const p2 = isPostgres ? '$2' : '?';
+
+    const dateFilter = `AND CreatedDate >= ${p1} AND CreatedDate < ${p2}`;
+    const dateFilterFd = `AND fd."CreatedDate" >= ${p1} AND fd."CreatedDate" < ${p2}`;
+    const dateFilterD = `AND d."CreatedDate" >= ${p1} AND d."CreatedDate" < ${p2}`;
     
     let statusFilterD = '';
     let statusFilterFd = '';
     const queryParams: any[] = [startDate, endDate];
     
     if (statusVal !== 'all') {
-      statusFilterD = ` AND d.StateId = ?`;
-      statusFilterFd = ` AND fd.StateId = ?`;
+      const pN = isPostgres ? `$${queryParams.length + 1}` : '?';
+      statusFilterD = ` AND d."StateId" = ${pN}`;
+      statusFilterFd = ` AND fd."StateId" = ${pN}`;
       queryParams.push(Number(statusVal));
     }
 
     let hierarchyFilter = '';
-    if (pole && pole !== 'all') { hierarchyFilter += ` AND p."Level2" = ?`; queryParams.push(pole); }
-    if (dga && dga !== 'all') { hierarchyFilter += ` AND p."Level3" = ?`; queryParams.push(dga); }
-    if (dir && dir !== 'all') { hierarchyFilter += ` AND p."Level4" = ?`; queryParams.push(dir); }
-    if (service && service !== 'all') { hierarchyFilter += ` AND p."Level5" = ?`; queryParams.push(service); }
+    if (pole && pole !== 'all') { 
+      const pN = isPostgres ? `$${queryParams.length + 1}` : '?';
+      hierarchyFilter += ` AND p."Level2" = ${pN}`; 
+      queryParams.push(pole); 
+    }
+    if (dga && dga !== 'all') { 
+      const pN = isPostgres ? `$${queryParams.length + 1}` : '?';
+      hierarchyFilter += ` AND p."Level3" = ${pN}`; 
+      queryParams.push(dga); 
+    }
+    if (dir && dir !== 'all') { 
+      const pN = isPostgres ? `$${queryParams.length + 1}` : '?';
+      hierarchyFilter += ` AND p."Level4" = ${pN}`; 
+      queryParams.push(dir); 
+    }
+    if (service && service !== 'all') { 
+      const pN = isPostgres ? `$${queryParams.length + 1}` : '?';
+      hierarchyFilter += ` AND p."Level5" = ${pN}`; 
+      queryParams.push(service); 
+    }
 
     console.log('Cabinet V2 API: Fetching for year', yearVal || 'ALL');
     
@@ -81,15 +106,15 @@ export async function GET(req: Request) {
     // 1. Total Data 
     const allDocsRaw = await prismaEntities.$queryRawUnsafe(`
       SELECT 
-        DISTINCT d.Id, d.DocumentIdentifier, d.Reference, d.CreatedDate, d.MediumId, d.TypeId, d.DueDate, d.StateId, d.ClosureReasonId,
-        m.Label as MediumLabel,
-        t.Label as TypeLabel
+        DISTINCT d."Id", d."DocumentIdentifier", d."Reference", d."CreatedDate", d."MediumId", d."TypeId", d."DueDate", d."StateId", d."ClosureReasonId",
+        m."Label" as MediumLabel,
+        t."Label" as TypeLabel
       FROM sync_FactDocument d
-      JOIN sync_FactTask ft_h ON d.Id = ft_h.DocumentId
-      LEFT JOIN sync_DimStructureElementPath p ON ft_h.AssignedToStructureElementId = p.Id
-      LEFT JOIN sync_DimDocumentMedium m ON d.MediumId = m.Id
-      LEFT JOIN sync_DimDocumentType t ON d.TypeId = t.Id
-      WHERE 1=1 AND strftime('%Y', d.CreatedDate) != '2019' ${dateFilterD} ${statusFilterD} ${hierarchyFilter}
+      JOIN sync_FactTask ft_h ON d."Id" = ft_h."DocumentId"
+      LEFT JOIN sync_DimStructureElementPath p ON ft_h."AssignedToStructureElementId" = p."Id"
+      LEFT JOIN sync_DimDocumentMedium m ON d."MediumId" = m."Id"
+      LEFT JOIN sync_DimDocumentType t ON d."TypeId" = t."Id"
+      WHERE 1=1 AND ${yearSql} != '2019' ${dateFilterD} ${statusFilterD} ${hierarchyFilter}
     `, ...queryParams);
     const allDocs = allDocsRaw as any[];
 
@@ -194,15 +219,15 @@ export async function GET(req: Request) {
     // 4. Assignments (Filtered by DGS Pôle)
     const assignments = await prismaEntities.$queryRawUnsafe(`
       SELECT 
-        COUNT(DISTINCT ft.DocumentId) as count,
-        p.Level3 as dga, p.Level4 as direction, p.Level5 as service
+        COUNT(DISTINCT ft."DocumentId") as count,
+        p."Level3" as dga, p."Level4" as direction, p."Level5" as service
       FROM sync_FactTask ft
-      JOIN sync_FactDocument fd ON ft.DocumentId = fd.Id
-      JOIN sync_DimStructureElementPath p ON ft.AssignedToStructureElementId = p.Id
-      WHERE p.Path LIKE '1|269%' AND strftime('%Y', fd.CreatedDate) != '2019'
-      AND p.Level5 IS NOT NULL
+      JOIN sync_FactDocument fd ON ft."DocumentId" = fd."Id"
+      JOIN sync_DimStructureElementPath p ON ft."AssignedToStructureElementId" = p."Id"
+      WHERE p."Path" LIKE '1|269%' AND ${yearSql} != '2019'
+      AND p."Level5" IS NOT NULL
       ${dateFilterFd} ${statusFilterFd} ${hierarchyFilter}
-      GROUP BY p.Level3, p.Level4, p.Level5
+      GROUP BY p."Level3", p."Level4", p."Level5"
       ORDER BY dga, direction, count DESC
     `, ...queryParams);
 
@@ -214,13 +239,17 @@ export async function GET(req: Request) {
        delayTypeFilter = `AND ft.DocumentId IN (SELECT DocumentId FROM sync_FactTask WHERE AssignedToStructureElementId IN (${courantIds.length ? courantIds.join(',') : '-1'}))`;
     }
 
+    const delaySql = isPostgres
+      ? `AVG(EXTRACT(EPOCH FROM (ft."ResponseDate"::TIMESTAMP - fd."CreatedDate"::TIMESTAMP)) / 86400)`
+      : `AVG(julianday(ft.ResponseDate) - julianday(fd.CreatedDate))`;
+
     const delays = await prismaEntities.$queryRawUnsafe(`
-      SELECT AVG(julianday(ft.ResponseDate) - julianday(fd.CreatedDate)) as avgDelayDays
+      SELECT ${delaySql} as avgDelayDays
       FROM sync_FactTask ft
-      JOIN sync_FactDocument fd ON ft.DocumentId = fd.Id
-      JOIN sync_FactTask ft_h ON fd.Id = ft_h.DocumentId
-      LEFT JOIN sync_DimStructureElementPath p ON ft_h.AssignedToStructureElementId = p.Id
-      WHERE ft.ResponseDate IS NOT NULL AND strftime('%Y', fd.CreatedDate) != '2019'
+      JOIN sync_FactDocument fd ON ft."DocumentId" = fd."Id"
+      JOIN sync_FactTask ft_h ON fd."Id" = ft_h."DocumentId"
+      LEFT JOIN sync_DimStructureElementPath p ON ft_h."AssignedToStructureElementId" = p."Id"
+      WHERE ft."ResponseDate" IS NOT NULL AND ${yearSql} != '2019'
       ${dateFilterFd} ${statusFilterFd} ${hierarchyFilter}
       ${delayTypeFilter}
     `, ...queryParams) as any[];

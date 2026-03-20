@@ -24,13 +24,18 @@ export async function GET(req: Request) {
   const dirFilter = searchParams.get('dir');
 
   try {
+    const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
+    const yearPart = isPostgres 
+      ? `CAST(EXTRACT(YEAR FROM d."CreatedDate"::TIMESTAMP) AS INTEGER)`
+      : `CAST(strftime('%Y', d."CreatedDate") AS INTEGER)`;
+    
     // REFINED: Count UNIQUE DOCUMENTS (Courriers) assigned to these entities via FactTask
     const baseJoin = `
       FROM "sync_FactTask" t
       JOIN "sync_FactDocument" d ON t."DocumentId" = d."Id"
       JOIN "sync_DimStructureElementPath" p ON t."AssignedToStructureElementId" = p."Id"
-      WHERE CAST(strftime('%Y', d."CreatedDate") AS INTEGER) = ?
-        AND strftime('%Y', d."CreatedDate") != '2019'
+      WHERE ${yearPart} = ${isPostgres ? '$1' : '?'}
+        AND ${yearPart} != 2019
     `;
 
     // 1. Poles
