@@ -1,0 +1,25 @@
+--- Testing OData Connections ---
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/ODataBi/odata/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/ODataBi/odata/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/OData/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/OData/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/OData/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/OData/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/Elise/OData/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/Elise/OData/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/odata/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/odata/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/ODataBi/ (User: machevalier@ivry94.fr)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/ODataBi/ (User: machevalier)... 404 Not Found
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ (User: machevalier@ivry94.fr)... 200 OK
+SUCCESS! URL: https://ville-ivry94.illico.city/IVRY/Elise/, User: machevalier@ivry94.fr
+Testing: https://ville-ivry94.illico.city/IVRY/Elise/ (User: machevalier)... 200 OK
+SUCCESS! URL: https://ville-ivry94.illico.city/IVRY/Elise/, User: machevalier

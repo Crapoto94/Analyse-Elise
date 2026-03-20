@@ -1,0 +1,134 @@
+--- Probing OData Connections with ADM_STATS ---
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/odata/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/OData/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/OData/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/OData/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/ODataBi/OData/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/odata/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/OData/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/OData/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/OData/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/Elise/OData/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/odata/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/OData/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/OData/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/OData/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/IVRY/OData/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/ODataBi/odata/ (ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/ODataBi/odata/ (IVRY94\ADM_STATS)
+Failed (HTTP 404): https://ville-ivry94.illico.city/ODataBi/odata/ (adm_stats@ivry94.fr)
+Failed (HTTP 404): https://ville-ivry94.illico.city/ODataBi/odata/ (ADM_STATS@ivry94.fr)
+INTEREST: https://ville-ivry94.illico.city/AppBI/odata/ (User: ADM_STATS) -> Status: 401
+INTEREST: https://ville-ivry94.illico.city/AppBI/odata/ (User: IVRY94\ADM_STATS) -> Status: 401
+INTEREST: https://ville-ivry94.illico.city/AppBI/odata/ (User: adm_stats@ivry94.fr) -> Status: 401
+INTEREST: https://ville-ivry94.illico.city/AppBI/odata/ (User: ADM_STATS@ivry94.fr) -> Status: 401
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/ODataBi/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/Elise/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/IVRY/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/Elise/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/Elise/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/Elise/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/AppBI/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/AppBI/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://ivry94.illico.city/AppBI/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://ivry94.illico.city/AppBI/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/ODataBi/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/ODataBi/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/Elise/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/OData/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/OData/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/OData/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/IVRY/OData/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/Elise/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/Elise/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/Elise/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/Elise/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/ODataBi/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/ODataBi/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/ODataBi/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/ODataBi/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/AppBI/odata/ (ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/AppBI/odata/ (IVRY94\ADM_STATS) -> fetch failed
+Network Error: https://elise.illico.city/AppBI/odata/ (adm_stats@ivry94.fr) -> fetch failed
+Network Error: https://elise.illico.city/AppBI/odata/ (ADM_STATS@ivry94.fr) -> fetch failed
+--- Finished probing ---
