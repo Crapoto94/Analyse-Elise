@@ -28,7 +28,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, user: { email: user.email, role: user.role } });
 
   } catch (error: any) {
-    console.error('Login Error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Login Error Deep Diagnostic:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      metaData: error.meta,
+      dbUrlSystem: process.env.DATABASE_URL_SYSTEM?.replace(/:[^:@]+@/, ':***@')
+    });
+    return NextResponse.json({ 
+      error: 'Internal server error', 
+      details: error.message, 
+      code: error.code 
+    }, { status: 500 });
   }
 }

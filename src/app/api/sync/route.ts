@@ -84,6 +84,27 @@ async function bulkUpsert(tableName: string, items: any[], allCols: { name: stri
 }
 
 /**
+ * Ensure performance indexes exist (IN ENTITIES DB)
+ */
+async function ensureIndexes(tableName: string): Promise<void> {
+  const indexes: Record<string, string[]> = {
+    'sync_FactTask': ['DocumentId', 'AssignedToStructureElementId'],
+    'sync_FactDocument': ['Id', 'CreatedDate'],
+    'sync_DimStructureElementPath': ['Id']
+  };
+
+  const cols = indexes[tableName];
+  if (!cols) return;
+
+  for (const col of cols) {
+    const indexName = `idx_${tableName}_${col.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    await prismaEntities.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS "${indexName}" ON "${tableName}" ("${col}")`
+    );
+  }
+}
+
+/**
  * SSE encoder helper
  */
 function sseEvent(data: object): string {
@@ -171,6 +192,10 @@ export async function POST(req: Request) {
           }
 
           send({ type: 'entity_fetched', entity, count });
+          
+          // Create indexes for performance
+          await ensureIndexes(tableName);
+          
           send({ type: 'entity_done', entity, count });
           entityStats[entity] = count;
           totalCount += count;
