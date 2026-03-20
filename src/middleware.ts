@@ -5,8 +5,13 @@ export function middleware(request: NextRequest) {
   const session = request.cookies.get('elise_session');
   const { pathname } = request.nextUrl;
 
-  // Allow login page and auth APIs
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth') || pathname === '/api/health') {
+  // Allow login page, auth APIs, health check and debug diagnostics
+  if (
+    pathname.startsWith('/login') || 
+    pathname.startsWith('/api/auth') || 
+    pathname === '/api/health' || 
+    pathname.startsWith('/api/debug')
+  ) {
     return NextResponse.next();
   }
 
