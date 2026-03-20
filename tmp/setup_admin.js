@@ -1,34 +1,30 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const { PrismaClient } = require('../node_modules/@prisma/client/system');
+const crypto = require('crypto');
 
 async function main() {
-  console.log('--- Initializing Admin Suite DB ---');
-  
-  // Create AppConfig table
-  try {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "AppConfig" (
-        "key" TEXT PRIMARY KEY,
-        "value" TEXT NOT NULL
-      );
-    `);
-    console.log('Success: AppConfig table created.');
-  } catch (e) {
-    console.error('Error creating AppConfig table:', e.message);
-  }
+  const prisma = new PrismaClient();
+  const email = 'admin@ivry.fr';
+  const password = 'ivry'; // User can change this later
+  const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
 
-  // Seed default OData config if not present
+  console.log(`Creating user ${email}...`);
+  
   try {
-    await prisma.$executeRawUnsafe(`
-      INSERT OR IGNORE INTO "AppConfig" (key, value) VALUES ('ODATA_URL', 'https://ivry-sur-seine.ods.arpege.fr/odata');
-      INSERT OR IGNORE INTO "AppConfig" (key, value) VALUES ('ODATA_USER', 'ADM_STATS');
-    `);
-    console.log('Success: Default config seeded.');
-  } catch (e) {
-    console.error('Error seeding config:', e.message);
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { password: hashedPassword, role: 'ADMIN' },
+      create: {
+        email,
+        password: hashedPassword,
+        role: 'ADMIN'
+      }
+    });
+    console.log('User created/updated:', user);
+  } catch (error) {
+    console.error('Error creating user:', error);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+main();
