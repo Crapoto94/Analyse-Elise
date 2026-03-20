@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: odata-stats-app
+    restart: always
+    ports:
+      - "5002:5002"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL_SYSTEM=file:/app/data/system.db
+      - DATABASE_URL_ENTITIES=file:/app/data/entities.db
+      - AUTH_SECRET=ivry-sur-seine-secret-key-2024
+      - NODE_ENV=production
+      - PORT=5002
+      - HOSTNAME=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  default:
+    name: odata-network

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getODataClient } from '@/lib/odata';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -12,41 +11,41 @@ export default function StatistiquesPage() {
   const [dgaFilter, setDgaFilter] = useState('all');
   const [dirFilter, setDirFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const [poles, setPoles] = useState<string[]>([]);
-  const [dgas, setDgas] = useState<string[]>([]);
-  const [directions, setDirections] = useState<string[]>([]);
-  const [services, setServices] = useState<string[]>([]);
+  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+
+  const [poles, setPoles] = useState<{name: string, count: number}[]>([]);
+  const [dgas, setDgas] = useState<{name: string, count: number}[]>([]);
+  const [directions, setDirections] = useState<{name: string, count: number}[]>([]);
+  const [services, setServices] = useState<{name: string, count: number}[]>([]);
+  const [statuses, setStatuses] = useState<{id: number, name: string}[]>([]);
   
   const [stats, setStats] = useState<any>({
+    totalTasks: 0,
     totalDocs: 0,
     monthlyEvolution: [],
   });
   
   const [loading, setLoading] = useState(true);
   const [docCountsById, setDocCountsById] = useState<Record<number, number>>({});
-  const [isLocal, setIsLocal] = useState(false);
+  const [isLocal, setIsLocal] = useState(true);
 
-  const years = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 2018 + 1 }, (_, i) => 2018 + i).filter(y => y !== 2019);
 
   // 1. Initial Load: Fetch Hierarchy and Mail Counts
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      const client = getODataClient();
-      if (!client) return;
-
       try {
-        // Fetch all hierarchy elements of type SERVICE to avoid individuals
-        const hierarchyRes = await client.request("DimStructureElementPath?$filter=StructureElementTypeKey eq 'SERVICE'") as any;
-        const items = hierarchyRes.value || [];
+        const res = await fetch(`/api/hierarchy?year=${yearFilter}`);
+        const json = await res.json();
+        setPoles(json.poles || []);
 
-        const uniquePoles = Array.from(new Set(items.map((i: any) => i.Level2).filter(Boolean))) as string[];
-        setPoles(uniquePoles.sort());
-
-        // Fetch mail counts via FactTask for accuracy
-        fetchMailCounts(yearFilter);
-        fetchData();
+        await fetchMailCounts(yearFilter);
+        await fetchData();
       } catch (e) {
         console.error("Init error:", e);
       } finally {
@@ -60,46 +59,36 @@ export default function StatistiquesPage() {
   useEffect(() => {
     updateHierarchyOptions();
     fetchData();
-  }, [poleFilter, dgaFilter, dirFilter, serviceFilter]);
+  }, [poleFilter, dgaFilter, dirFilter, serviceFilter, monthFilter, statusFilter]);
 
   const fetchMailCounts = async (year: number) => {
-    const client = getODataClient();
-    if (!client) return;
     try {
-      const counts: Record<number, number> = {};
-      const startDate = `${year}-01-01T00:00:00Z`;
-      const endDate = `${year}-12-31T23:59:59Z`;
-      
-      // Top 5000 tasks for the year
-      const res = await client.request(`FactTask?$select=AssignedToStructureElementId&$filter=Document/CreatedDate ge ${startDate} and Document/CreatedDate le ${endDate}&$top=5000`) as any;
-      (res.value || []).forEach((t: any) => {
-        const sid = t.AssignedToStructureElementId;
-        if (sid) counts[sid] = (counts[sid] || 0) + 1;
-      });
-      setDocCountsById(counts);
+      const res = await fetch(`/api/stats-tasks?year=${year}`);
+      const json = await res.json();
+      if (json.counts) {
+        setDocCountsById(json.counts);
+      }
     } catch (e) {
       console.error("Counts error:", e);
     }
   };
 
   const updateHierarchyOptions = async () => {
-    const client = getODataClient();
-    if (!client) return;
-    
-    let filter = "StructureElementTypeKey eq 'SERVICE'";
-    if (poleFilter !== 'all') filter += ` and Level2 eq '${poleFilter.replace(/'/g, "''")}'`;
-    
-    const res = await client.request(`DimStructureElementPath?$filter=${filter}`) as any;
-    const items = res.value || [];
+    try {
+      const params = new URLSearchParams({ year: yearFilter.toString() });
+      if (poleFilter !== 'all') params.set('pole', poleFilter);
+      if (dgaFilter !== 'all') params.set('dga', dgaFilter);
+      if (dirFilter !== 'all') params.set('dir', dirFilter);
+      
+      const res = await fetch(`/api/hierarchy?${params}`);
+      const json = await res.json();
 
-    if (poleFilter !== 'all') {
-      setDgas(Array.from(new Set(items.map((i: any) => i.Level3).filter(Boolean))).sort() as string[]);
-    }
-    if (dgaFilter !== 'all') {
-      setDirections(Array.from(new Set(items.map((i: any) => i.Level4).filter(Boolean))).sort() as string[]);
-    }
-    if (dirFilter !== 'all') {
-      setServices(Array.from(new Set(items.map((i: any) => i.Level5).filter(Boolean))).sort() as string[]);
+      if (poleFilter !== 'all') setDgas(json.dgas || []);
+      if (dgaFilter !== 'all') setDirections(json.directions || []);
+      if (dirFilter !== 'all') setServices(json.services || []);
+      if (json.statuses) setStatuses(json.statuses);
+    } catch (e) {
+      console.error('Hierarchy error:', e);
     }
   };
 
@@ -112,7 +101,9 @@ export default function StatistiquesPage() {
         pole: poleFilter,
         dga: dgaFilter,
         dir: dirFilter,
-        service: serviceFilter
+        service: serviceFilter,
+        month: monthFilter,
+        status: statusFilter
       });
       
       const res = await fetch(`/api/stats?${params}`);
@@ -121,25 +112,25 @@ export default function StatistiquesPage() {
       if (data.error) throw new Error(data.error);
 
       setStats({
+        totalTasks: data.totalTasks,
         totalDocs: data.totalDocs,
         monthlyEvolution: data.monthlyEvolution
       });
       setIsLocal(data.isLocal || false);
     } catch (e) {
       console.error("Fetch data error:", e);
-      // Fallback or error state
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             Stats généraux
-            {isLocal && <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase tracking-tighter">Locales</span>}
+            {isLocal && <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase tracking-tighter">Locales ⚡</span>}
           </h1>
           <p className="text-slate-500">Exploration globale des courriers par structure</p>
         </div>
@@ -150,6 +141,28 @@ export default function StatistiquesPage() {
             className="px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
           >
             {years.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+
+          <select 
+            value={monthFilter} 
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+          >
+            <option value="all">Toute l'année</option>
+            {monthNames.map((name, i) => (
+              <option key={i + 1} value={i + 1}>{name}</option>
+            ))}
+          </select>
+
+          <select 
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-amber-600"
+          >
+            <option value="all">Tout statut</option>
+            {statuses.map(s => (
+              <option key={s.id} value={s.id}>{s.name || 'Sans nom'}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -164,9 +177,9 @@ export default function StatistiquesPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatsCard title="Total Courriers (Créés)" value={stats.totalDocs} icon="📄" color="blue" />
-        <StatsCard title="Courriers Reçus (Assignés)" value={Object.values(docCountsById).reduce((a, b) => a + b, 0)} icon="📥" color="indigo" />
-        <StatsCard title="Mois en cours" value={stats.monthlyEvolution[stats.monthlyEvolution.length - 1]?.value || 0} icon="📅" color="emerald" />
+        <StatsCard title="Courriers Assignés" value={stats.totalDocs} icon="📄" color="blue" />
+        <StatsCard title="Total Tâches reçues" value={stats.totalTasks} icon="📥" color="indigo" />
+        <StatsCard title="Répartition par entité (Tâches)" value={Object.values(docCountsById).reduce((a, b) => a + b, 0)} icon="👥" color="emerald" />
       </div>
 
       {/* Main Chart */}
@@ -208,7 +221,11 @@ function FilterSelect({ label, value, onChange, options, disabled }: any) {
         className="px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50 transition-all font-medium"
       >
         <option value="all">Tous les {label.toLowerCase()}s</option>
-        {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+        {options.map((opt: any) => (
+          <option key={opt.name} value={opt.name}>
+            {opt.name} ({opt.count.toLocaleString()})
+          </option>
+        ))}
       </select>
     </div>
   );

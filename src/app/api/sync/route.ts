@@ -1,98 +1,216 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { prismaEntities, prismaSystem } from '@/lib/prisma';
 import { getODataClient } from '@/lib/odata';
 
-const YEARS_TO_SYNC = [2022, 2023, 2024, 2025];
+/**
+ * Sanitize an entity name to be a safe SQL table name
+ */
+function tableNameFor(entity: string): string {
+  return `sync_${entity.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+}
 
-export async function POST(req: Request) {
-  const startTime = new Date();
-  let totalDocsCount = 0;
-  let totalTasksCount = 0;
+/**
+ * Introspect an object and return column definitions
+ */
+function inferColumns(sample: Record<string, any>): { name: string; type: string }[] {
+  return Object.entries(sample).map(([key, val]) => {
+    if (val !== null && typeof val === 'object') return { name: key, type: 'TEXT' };
+    if (typeof val === 'number') return { name: key, type: 'REAL' };
+    if (typeof val === 'boolean') return { name: key, type: 'INTEGER' };
+    return { name: key, type: 'TEXT' };
+  });
+}
 
-  try {
-    const { config } = await req.json();
-    if (!config) return NextResponse.json({ error: "Config missing" }, { status: 400 });
+/**
+ * Create table if not exists, then add any missing columns (IN ENTITIES DB)
+ */
+async function ensureTable(tableName: string, cols: { name: string; type: string }[]): Promise<void> {
+  const colDefs = cols.map(c => `"${c.name}" ${c.type}`).join(', ');
+  await prismaEntities.$executeRawUnsafe(
+    `CREATE TABLE IF NOT EXISTS "${tableName}" (_id INTEGER PRIMARY KEY AUTOINCREMENT, _sync_date TEXT, ${colDefs})`
+  );
 
-    const client = getODataClient(config);
-    if (!client) return NextResponse.json({ error: "Client not initialized" }, { status: 400 });
+  // Upgrade the old non-unique index to a UNIQUE INDEX for INSERT OR REPLACE
+  await prismaEntities.$executeRawUnsafe(`DROP INDEX IF EXISTS "idx_${tableName}_external_id"`);
+  await prismaEntities.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_${tableName}_external_id_unique" ON "${tableName}" ("_external_id")`
+  );
 
-    for (const year of YEARS_TO_SYNC) {
-      console.log(`Syncing year ${year}...`);
-      const filter = `CreatedDateNavigation/TheYear eq ${year}`;
-      const expand = "CreatedDateNavigation($select=TheYear),CreatedByStructureElement($expand=DimStructureElementPathIdNavigation($select=Level1,Level2,Level3,Level4,Level5))";
-      const select = "Id,CreatedDate";
-      
-      const res = await client.request(`FactDocument?$filter=${filter}&$expand=${expand}&$select=${select}&$top=10000`) as any;
-      const docs = (res.value || []).map((d: any) => ({
-        externalId: d.Id,
-        createdDate: new Date(d.CreatedDate),
-        theYear: d.CreatedDateNavigation?.TheYear,
-        level1: d.CreatedByStructureElement?.DimStructureElementPathIdNavigation?.Level1,
-        level2: d.CreatedByStructureElement?.DimStructureElementPathIdNavigation?.Level2,
-        level3: d.CreatedByStructureElement?.DimStructureElementPathIdNavigation?.Level3,
-        level4: d.CreatedByStructureElement?.DimStructureElementPathIdNavigation?.Level4,
-        level5: d.CreatedByStructureElement?.DimStructureElementPathIdNavigation?.Level5
-      }));
+  const existingCols = (await prismaEntities.$queryRawUnsafe(
+    `PRAGMA table_info("${tableName}")`
+  )) as { name: string }[];
+  const existingNames = new Set(existingCols.map((c) => c.name));
 
-      // Upsert docs to SQLite
-      for (const d of docs) {
-        await prisma.factDocument.upsert({
-          where: { externalId: d.externalId },
-          update: d,
-          create: d,
-        });
-        totalDocsCount++;
-      }
+  for (const col of cols) {
+    if (!existingNames.has(col.name)) {
+      await prismaEntities.$executeRawUnsafe(
+        `ALTER TABLE "${tableName}" ADD COLUMN "${col.name}" ${col.type}`
+      );
+    }
+  }
+}
 
-      // Sync Tasks
-      const startDate = `${year}-01-01T00:00:00Z`;
-      const endDate = `${year}-12-31T23:59:59Z`;
-      const tasksRes = await client.request(`FactTask?$filter=Document/CreatedDate ge ${startDate} and Document/CreatedDate le ${endDate}&$select=Id,DocumentId,AssignedToStructureElementId,CreatedDate&$top=10000`) as any;
-      const tasks = (tasksRes.value || []).map((t: any) => ({
-        externalId: t.Id,
-        documentId: t.DocumentId,
-        assignedToStructureElementId: t.AssignedToStructureElementId,
-        createdDate: new Date(t.CreatedDate),
-      }));
+/**
+ * Bulk upsert items (IN ENTITIES DB)
+ */
+async function bulkUpsert(tableName: string, items: any[], allCols: { name: string; type: string }[]): Promise<void> {
+  const BATCH_SIZE = 500;
+  const colNamesStr = ['"_sync_date"', ...allCols.map(c => `"${c.name}"`)].join(', ');
+  const numParamsPerRow = allCols.length + 1;
 
-      for (const t of tasks) {
-        await prisma.factTask.upsert({
-          where: { externalId: t.externalId },
-          update: t,
-          create: t,
-        });
-        totalTasksCount++;
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const chunk = items.slice(i, i + BATCH_SIZE);
+    const placeholders: string[] = [];
+    const values: any[] = [];
+    const nowStr = new Date().toISOString();
+
+    for (const item of chunk) {
+      placeholders.push(`(${new Array(numParamsPerRow).fill('?').join(', ')})`);
+      values.push(nowStr);
+
+      for (const col of allCols) {
+        if (col.name === '_external_id') {
+          values.push(item._external_id);
+        } else {
+          const val = item[col.name];
+          values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
+        }
       }
     }
 
-    const endTime = new Date();
-    // @ts-ignore
-    await prisma.syncLog.create({
-      data: {
-        startTime,
-        endTime,
-        durationMs: endTime.getTime() - startTime.getTime(),
-        docsCount: totalDocsCount,
-        tasksCount: totalTasksCount,
-        status: "SUCCESS"
-      }
-    });
-
-    return NextResponse.json({ success: true, message: "Sync complete", stats: { docs: totalDocsCount, tasks: totalTasksCount } });
-  } catch (err: any) {
-    console.error("Sync error:", err);
-    // @ts-ignore
-    await prisma.syncLog.create({
-      data: {
-        startTime,
-        endTime: new Date(),
-        durationMs: new Date().getTime() - startTime.getTime(),
-        docsCount: totalDocsCount,
-        tasksCount: totalTasksCount,
-        status: "ERROR",
-        message: err.message
-      }
-    });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    const query = `INSERT OR REPLACE INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')}`;
+    await prismaEntities.$executeRawUnsafe(query, ...values);
   }
+}
+
+/**
+ * SSE encoder helper
+ */
+function sseEvent(data: object): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
+export async function POST(req: Request) {
+  const { config, entities: selectedEntities } = await req.json();
+
+  if (!config) {
+    return NextResponse.json({ error: 'Config missing' }, { status: 400 });
+  }
+
+  const client = getODataClient(config);
+  if (!client) {
+    return NextResponse.json({ error: 'Client not initialized' }, { status: 400 });
+  }
+
+  const startTime = new Date();
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(sseEvent(data)));
+      };
+
+      let allEntities: string[] = [];
+      try {
+        if (!selectedEntities || selectedEntities.length === 0) {
+          const root = (await (client as any).request('')) as any;
+          allEntities = (root.value || []).map((e: any) => e.name);
+        } else {
+          allEntities = selectedEntities;
+        }
+      } catch (e: any) {
+        send({ type: 'error', message: 'Failed to access OData: ' + e.message });
+        controller.close();
+        return;
+      }
+
+      send({ type: 'start', total: allEntities.length, entities: allEntities });
+
+      const entityStats: Record<string, number> = {};
+      let totalCount = 0;
+
+      for (let i = 0; i < allEntities.length; i++) {
+        const entity = allEntities[i];
+        const tableName = tableNameFor(entity);
+
+        send({ type: 'entity_start', entity, index: i, total: allEntities.length });
+
+        try {
+          let count = 0;
+          let nextUrl: string | null = entity;
+
+          while (nextUrl) {
+            const res = (await (client as any).request(nextUrl)) as any;
+            const items: any[] = res.value || [];
+
+            if (items.length > 0) {
+              const sampleMerged: Record<string, any> = {};
+              for (const item of items) {
+                for (const [k, v] of Object.entries(item)) {
+                  if (!(k in sampleMerged)) sampleMerged[k] = v;
+                }
+              }
+
+              const cols = inferColumns(sampleMerged);
+              const allCols = [{ name: '_external_id', type: 'TEXT' }, ...cols];
+              await ensureTable(tableName, allCols);
+
+              for (let k = 0; k < items.length; k++) {
+                const item = items[k];
+                item._external_id = item.Id !== undefined ? String(item.Id)
+                  : item.Key !== undefined ? String(item.Key)
+                  : `row_${count + k}_${Math.random().toString(36).substr(2, 6)}`;
+              }
+
+              await bulkUpsert(tableName, items, allCols);
+              count += items.length;
+            }
+
+            nextUrl = (res['@odata.nextLink'] as string) || null;
+            send({ type: 'entity_progress', entity, count });
+          }
+
+          send({ type: 'entity_fetched', entity, count });
+          send({ type: 'entity_done', entity, count });
+          entityStats[entity] = count;
+          totalCount += count;
+
+        } catch (err: any) {
+          console.error(`[Sync] Error syncing ${entity}:`, err.message);
+          entityStats[entity] = -1;
+          send({ type: 'entity_error', entity, error: err.message });
+        }
+      }
+
+      // Write sync log (IN SYSTEM DB)
+      try {
+        await prismaSystem.syncLog.create({
+          data: {
+            startTime,
+            endTime: new Date(),
+            durationMs: new Date().getTime() - startTime.getTime(),
+            docsCount: totalCount,
+            tasksCount: 0,
+            status: 'SUCCESS',
+            message: Object.entries(entityStats)
+              .map(([k, v]) => `${k}:${v >= 0 ? v : 'ERR'}`)
+              .join(' | ')
+          }
+        });
+      } catch (logErr: any) {
+        console.error('[Sync] Failed to write SyncLog:', logErr.message);
+      }
+
+      send({ type: 'done', totalCount, stats: entityStats });
+      controller.close();
+    }
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  });
 }

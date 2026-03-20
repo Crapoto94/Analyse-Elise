@@ -217,7 +217,7 @@ export default function ConnectPage() {
                         {log.durationMs ? `${(log.durationMs / 1000).toFixed(1)}s` : '-'}
                       </td>
                       <td className="px-6 py-4 text-slate-500">
-                        {log.docCount} / {log.taskCount}
+                        {log.docsCount} / {log.tasksCount}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">

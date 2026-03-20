@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/@prisma/client/system"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL_SYSTEM")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+}
+
+model AppConfig {
+  key   String @id
+  value String
+}
+
+model SyncLog {
+  id         Int      @id @default(autoincrement())
+  startTime  DateTime
+  endTime    DateTime
+  durationMs Int
+  docsCount  Int
+  tasksCount Int
+  status     String
+  message    String?
+}

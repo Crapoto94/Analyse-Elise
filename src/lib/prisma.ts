@@ -1,15 +1,8 @@
-import { PrismaClient } from '@prisma/client'
+import { PrismaClient as SystemClient } from '../../node_modules/@prisma/client/system'
+import { PrismaClient as EntitiesClient } from '../../node_modules/@prisma/client/entities'
 
-const prismaClientSingleton = () => {
-  return new PrismaClient()
-}
+const prismaSystem = new SystemClient()
+const prismaEntities = new EntitiesClient()
 
-declare global {
-  var prisma: undefined | ReturnType<typeof prismaClientSingleton>
-}
-
-const prisma = globalThis.prisma ?? prismaClientSingleton()
-
-export default prisma
-
-if (process.env.NODE_ENV !== 'production') globalThis.prisma = prisma
+export { prismaSystem, prismaEntities }
+export default prismaSystem // Default to system for convenience in some parts
