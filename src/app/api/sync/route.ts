@@ -62,9 +62,8 @@ async function ensureTable(tableName: string, cols: { name: string; type: string
  * Bulk upsert items (IN ENTITIES DB)
  */
 async function bulkUpsert(tableName: string, items: any[], allCols: { name: string; type: string }[], isPostgres: boolean): Promise<void> {
-  // Use a very small batch size for major tables to avoid any parameter or memory limits
-  // 10 rows with 50 columns = 500 parameters (Very safe for all DBs)
-  const BATCH_SIZE = 10; 
+  // Use a balanced batch size for performance
+  const BATCH_SIZE = 100; 
   const colNames = ['_sync_date', ...allCols.map(c => c.name)];
   const colNamesStr = colNames.map(n => `"${n}"`).join(', ');
   
@@ -75,56 +74,59 @@ async function bulkUpsert(tableName: string, items: any[], allCols: { name: stri
 
   for (let i = 0; i < items.length; i += BATCH_SIZE) {
     const chunk = items.slice(i, i + BATCH_SIZE);
-    const placeholders: string[] = [];
-    const values: any[] = [];
-    const nowStr = new Date().toISOString();
-    let paramCount = 1;
-
-    for (const item of chunk) {
-      const rowP: string[] = [];
-      
-      // _sync_date
-      rowP.push(isPostgres ? `$${paramCount++}` : '?');
-      values.push(nowStr);
-
-      for (const col of allCols) {
-        // We use explicit casting only if needed, otherwise let the driver handle nulls
-        rowP.push(isPostgres ? `$${paramCount++}` : '?');
-        
-        if (col.name === '_external_id') {
-          values.push(String(item._external_id)); 
-        } else {
-          let val = item[col.name];
-          if (val === undefined) val = null;
-          
-          if (col.type === 'BOOLEAN' && val !== null) {
-            values.push(val === true || val === 'true' || val === 1);
-          } else if ((col.type === 'REAL' || col.type === 'DOUBLE PRECISION') && val !== null) {
-            const num = Number(val);
-            values.push(isNaN(num) ? null : num);
-          } else {
-            values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
-          }
+    
+    try {
+      await executeBatch(tableName, chunk, allCols, isPostgres, colNamesStr, updateSet);
+    } catch (err: any) {
+      console.warn(`[bulkUpsert] Batch failed for ${tableName}, retrying one by one...`);
+      // Fallback: try one by one to find the culprit and continue
+      for (const item of chunk) {
+        try {
+          await executeBatch(tableName, [item], allCols, isPostgres, colNamesStr, updateSet);
+        } catch (itemErr: any) {
+          console.error(`[bulkUpsert] Row failure on ${tableName} (_external_id: ${item._external_id}):`, itemErr.message);
+          // We don't throw here to allow the rest of the sync to continue
         }
       }
-      placeholders.push(`(${rowP.join(', ')})`);
-    }
-
-    const query = `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`;
-
-    try {
-      await prismaEntities.$executeRawUnsafe(query, ...values);
-    } catch (err: any) {
-      console.error(`[bulkUpsert] FATAL Error on ${tableName}:`, {
-        message: err.message,
-        isPostgres,
-        itemCount: chunk.length,
-        paramsCount: values.length,
-        queryStart: query.substring(0, 500)
-      });
-      throw err;
     }
   }
+}
+
+async function executeBatch(tableName: string, chunk: any[], allCols: any[], isPostgres: boolean, colNamesStr: string, updateSet: string) {
+  const placeholders: string[] = [];
+  const values: any[] = [];
+  const nowStr = new Date().toISOString();
+  let paramCount = 1;
+
+  for (const item of chunk) {
+    const rowP: string[] = [];
+    rowP.push(isPostgres ? `$${paramCount++}` : '?'); // _sync_date
+    values.push(nowStr);
+
+    for (const col of allCols) {
+      rowP.push(isPostgres ? `$${paramCount++}` : '?');
+      
+      if (col.name === '_external_id') {
+        values.push(String(item._external_id)); 
+      } else {
+        let val = item[col.name];
+        if (val === undefined) val = null;
+        
+        if (col.type === 'BOOLEAN' && val !== null) {
+          values.push(val === true || val === 'true' || val === 1);
+        } else if ((col.type === 'REAL' || col.type === 'DOUBLE PRECISION') && val !== null) {
+          const num = Number(val);
+          values.push(isNaN(num) ? null : num);
+        } else {
+          values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
+        }
+      }
+    }
+    placeholders.push(`(${rowP.join(', ')})`);
+  }
+
+  const query = `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`;
+  await prismaEntities.$executeRawUnsafe(query, ...values);
 }
 
 /**
