@@ -28,7 +28,7 @@ services:
     depends_on:
       - db
     volumes:
-      - ./system.db:/app/data/system.db
+      - odata-system-data:/app/data
     environment:
       - DATABASE_URL_SYSTEM=file:/app/data/system.db
       - DATABASE_URL_ENTITIES=postgresql://postgres:postgres@db:5432/app_entities?schema=public
@@ -36,10 +36,12 @@ services:
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
       - PORT=5002
-      - HOSTNAME=0.0.0.0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+volumes:
+  odata-system-data:
+  postgres_data:
       start_period: 40s

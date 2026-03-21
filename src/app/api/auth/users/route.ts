@@ -25,13 +25,17 @@ export async function POST(req: Request) {
     const { email, password, role } = await req.json();
     const hashedPassword = hashPassword(password);
     
-    await prismaSystem.$executeRawUnsafe(`
-      INSERT INTO "User" (email, password, role) 
-      VALUES ('${email}', '${hashedPassword}', '${role || 'USER'}')
-    `);
+    await prismaSystem.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        role: role || 'USER'
+      }
+    });
     
     return NextResponse.json({ success: true });
   } catch (e: any) {
+    console.error('[User API] Create error:', e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }

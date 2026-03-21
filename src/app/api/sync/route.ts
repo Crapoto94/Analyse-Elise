@@ -156,13 +156,26 @@ function sseEvent(data: object): string {
 }
 
 export async function POST(req: Request) {
-  const { config, entities: selectedEntities } = await req.json();
+    let { baseUrl, username, password, entities: selectedEntities } = await req.json();
 
-  if (!config) {
-    return NextResponse.json({ error: 'Config missing' }, { status: 400 });
-  }
+    // Fallback to server-side config if not provided in request
+    if (!baseUrl || !username || !password) {
+      const savedConfig = await prismaSystem.appConfig.findUnique({
+        where: { key: 'odata_config' }
+      });
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig.value);
+        baseUrl = baseUrl || parsed.baseUrl;
+        username = username || parsed.username;
+        password = password || parsed.password;
+      }
+    }
 
-  const client = getODataClient(config);
+    if (!baseUrl || !username || !password) {
+      return NextResponse.json({ error: 'OData configuration missing' }, { status: 400 });
+    }
+
+  const client = getODataClient({ baseUrl, username, password });
   if (!client) {
     return NextResponse.json({ error: 'Client not initialized' }, { status: 400 });
   }

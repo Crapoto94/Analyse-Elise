@@ -17,17 +17,45 @@ export default function ConnectPage() {
   const [logs, setLogs] = useState<any[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('odata_config');
-    if (saved) {
-      try {
-        const config = JSON.parse(saved);
-        setBaseUrl(config.baseUrl);
-        setUsername(config.username);
-        setPassword(config.password);
-      } catch (e) {
-        console.error("Error loading saved config", e);
+    // Function to load from localStorage
+    const loadFromLocalStorage = () => {
+      const saved = localStorage.getItem('odata_config');
+      if (saved) {
+        try {
+          const config = JSON.parse(saved);
+          setBaseUrl(config.baseUrl || '');
+          setUsername(config.username || '');
+          setPassword(config.password || '');
+        } catch (e) {
+          console.error("Error parsing saved config from localStorage", e);
+        }
       }
-    }
+    };
+
+    // 1. Try to load from server first
+    fetch('/api/config/odata')
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to fetch config from server');
+        }
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.baseUrl) {
+          setBaseUrl(data.baseUrl);
+          setUsername(data.username || '');
+          setPassword(data.password || '');
+          localStorage.setItem('odata_config', JSON.stringify(data)); // Sync local
+        } else {
+          // 2. Fallback to localStorage if server returns empty or invalid data
+          loadFromLocalStorage();
+        }
+      })
+      .catch((e) => {
+        console.error("Error loading config from server, falling back to localStorage:", e);
+        // Fallback to localStorage on error
+        loadFromLocalStorage();
+      });
   }, []);
 
   useEffect(() => {
@@ -68,16 +96,37 @@ export default function ConnectPage() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const config: ODataConfig = {
       baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
       username,
       password
     };
+    
+    // Save to localStorage (client backup)
     localStorage.setItem('odata_config', JSON.stringify(config));
-    // Also update session just in case
-    sessionStorage.setItem('odata_config', JSON.stringify(config));
-    router.push('/explorer');
+
+    // Save to Server (persistence)
+    try {
+      setLoading(true);
+      const res = await fetch('/api/config/odata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      
+      if (!res.ok) {
+        alert('Erreur lors de la sauvegarde sur le serveur');
+        return;
+      }
+      
+      alert('Configuration enregistrée sur le serveur');
+      router.push('/explorer');
+    } catch (err: any) {
+      alert('Erreur: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
