@@ -1,15 +1,26 @@
 import { NextResponse } from 'next/server';
 import { prismaEntities } from '@/lib/prisma';
+import { fetchDirectStats } from '@/lib/odata-direct';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
+  const source = searchParams.get('source');
   const pole = searchParams.get('pole');
   const dga = searchParams.get('dga');
   const dir = searchParams.get('dir');
   const service = searchParams.get('service');
   const month = searchParams.get('month');
   const status = searchParams.get('status');
+
+  if (source === 'odata') {
+    try {
+      const stats = await fetchDirectStats(year, month || 'all');
+      return NextResponse.json({ ...stats, isLocal: false });
+    } catch (err: any) {
+      return NextResponse.json({ error: 'OData Direct Error: ' + err.message }, { status: 500 });
+    }
+  }
 
   try {
     let startDate = `${year}-01-01`;
@@ -22,6 +33,8 @@ export async function GET(req: Request) {
       const nextYear = m === 12 ? year + 1 : year;
       endDate = `${nextYear}-${nextMonth.toString().padStart(2, '0')}-01`;
     }
+
+    const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
 
     // COMMON BASE FOR BOTH METRICS (Based on Assignments)
     let baseJoin = `
@@ -40,12 +53,16 @@ export async function GET(req: Request) {
 
     // 1. TOTAL TASKS (Workload) - All rows
     const taskRows = (await prismaEntities.$queryRawUnsafe(`SELECT COUNT(*) as total ${baseJoin}`, ...params)) as any[];
-    const totalTasks = Number(taskRows[0]?.total || 0);
+    const totalTasks = Number(taskRows[0]?.total || taskRows[0]?.count || 0);
 
     // 2. UNIQUE DOCUMENTS (Courriers) - Grouped by Month
+    const monthSql = isPostgres 
+      ? `EXTRACT(MONTH FROM d."CreatedDate")` 
+      : `CAST(strftime('%m', d."CreatedDate") AS INTEGER)`;
+
     const docRows = (await prismaEntities.$queryRawUnsafe(`
       SELECT 
-        CAST(strftime('%m', d."CreatedDate") AS INTEGER) as month,
+        ${monthSql} as month,
         COUNT(DISTINCT t."DocumentId") as total,
         COUNT(DISTINCT CASE WHEN p."Level2" LIKE '%CABINET%' OR p."Level1" LIKE '%MAIRE%' THEN t."DocumentId" END) as muni
       ${baseJoin}

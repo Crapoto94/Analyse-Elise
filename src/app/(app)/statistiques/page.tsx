@@ -30,7 +30,18 @@ export default function StatistiquesPage() {
   
   const [loading, setLoading] = useState(true);
   const [docCountsById, setDocCountsById] = useState<Record<number, number>>({});
-  const [isLocal, setIsLocal] = useState(true);
+  const [dataSource, setDataSource] = useState<'local' | 'odata'>('local');
+
+  // Load data source choice
+  useEffect(() => {
+    const updateSource = () => {
+      const saved = localStorage.getItem('data_source') as 'local' | 'odata';
+      if (saved) setDataSource(saved);
+    };
+    updateSource();
+    window.addEventListener('dataSourceChanged', updateSource);
+    return () => window.removeEventListener('dataSourceChanged', updateSource);
+  }, []);
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: currentYear - 2018 + 1 }, (_, i) => 2018 + i).filter(y => y !== 2019);
@@ -53,17 +64,18 @@ export default function StatistiquesPage() {
       }
     };
     init();
-  }, [yearFilter]);
+  }, [yearFilter, dataSource]); // Re-init on dataSource change
 
   // Handle cascading filters
   useEffect(() => {
     updateHierarchyOptions();
     fetchData();
-  }, [poleFilter, dgaFilter, dirFilter, serviceFilter, monthFilter, statusFilter]);
+  }, [poleFilter, dgaFilter, dirFilter, serviceFilter, monthFilter, statusFilter, dataSource]);
 
   const fetchMailCounts = async (year: number) => {
     try {
-      const res = await fetch(`/api/stats-tasks?year=${year}`);
+      const params = new URLSearchParams({ year: year.toString(), source: dataSource });
+      const res = await fetch(`/api/stats-tasks?${params}`);
       const json = await res.json();
       if (json.counts) {
         setDocCountsById(json.counts);
@@ -103,7 +115,8 @@ export default function StatistiquesPage() {
         dir: dirFilter,
         service: serviceFilter,
         month: monthFilter,
-        status: statusFilter
+        status: statusFilter,
+        source: dataSource
       });
       
       const res = await fetch(`/api/stats?${params}`);
@@ -116,7 +129,6 @@ export default function StatistiquesPage() {
         totalDocs: data.totalDocs,
         monthlyEvolution: data.monthlyEvolution
       });
-      setIsLocal(data.isLocal || false);
     } catch (e) {
       console.error("Fetch data error:", e);
     } finally {
@@ -130,7 +142,11 @@ export default function StatistiquesPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             Stats généraux
-            {isLocal && <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase tracking-tighter">Locales ⚡</span>}
+            {dataSource === 'odata' ? (
+              <span className="text-xs bg-amber-100 text-amber-600 px-2 py-1 rounded-full uppercase tracking-tighter animate-pulse">LIVE 🚀</span>
+            ) : (
+              <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase tracking-tighter">LOCAL ⚡</span>
+            )}
           </h1>
           <p className="text-slate-500">Exploration globale des courriers par structure</p>
         </div>

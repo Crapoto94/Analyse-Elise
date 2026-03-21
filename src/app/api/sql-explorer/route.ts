@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prismaEntities, prismaSystem } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 export async function GET(req: Request) {
+  // 1. Security Check (ADMIN ONLY)
+  const session = await getSession();
+  if (!session || session.role !== 'ADMIN') {
+     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(req.url);
   const table = searchParams.get('table');
   const query = searchParams.get('query');
@@ -9,61 +16,51 @@ export async function GET(req: Request) {
   const limitParam = searchParams.get('limit');
   const limit = limitParam ? parseInt(limitParam) : 100;
 
+  const isPostgres = dbParam === 'entities' && process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
   const prisma = dbParam === 'system' ? prismaSystem : prismaEntities;
 
   try {
     if (!table) {
-      // List all tables from selected DB
-      const tables: any[] = await prisma.$queryRawUnsafe(`
-        SELECT name FROM sqlite_master 
-        WHERE type='table' AND name NOT LIKE '_prisma%'
-        ORDER BY name
-      `);
+      // List all tables
+      const tables: any[] = isPostgres 
+        ? await prisma.$queryRawUnsafe(`SELECT tablename as name FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename`)
+        : await prisma.$queryRawUnsafe(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_prisma%' ORDER BY name`);
+      
       return NextResponse.json({ tables: tables.map((t: any) => t.name) });
     }
 
-    // Validate table name (only alphanumeric + underscore for security)
     const safeName = table.replace(/[^a-zA-Z0-9_]/g, '');
-    if (safeName !== table) {
-      return NextResponse.json({ error: 'Invalid table name' }, { status: 400 });
-    }
+    if (safeName !== table) return NextResponse.json({ error: 'Invalid name' }, { status: 400 });
 
     if (query) {
-      // Execute a custom SQL query (must not start with anything dangerous)
       const upperQuery = query.trim().toUpperCase();
-      if (!upperQuery.startsWith('SELECT')) {
-        return NextResponse.json({ error: 'Only SELECT queries are allowed' }, { status: 400 });
-      }
+      if (!upperQuery.startsWith('SELECT')) return NextResponse.json({ error: 'SELECT only' }, { status: 400 });
       const rows: any[] = await prisma.$queryRawUnsafe(query);
       return NextResponse.json({ data: rows, count: rows.length });
     }
 
-    // Get column info for this table
-    const columns: any[] = await prisma.$queryRawUnsafe(
-      `PRAGMA table_info("${safeName}")`
-    );
+    // Column info
+    const columns: any[] = isPostgres 
+      ? await prisma.$queryRawUnsafe(`SELECT column_name as name, data_type as type FROM information_schema.columns WHERE table_name = '${safeName}'`)
+      : await prisma.$queryRawUnsafe(`PRAGMA table_info("${safeName}")`);
 
-    // Get count
-    const countResult: any[] = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*) as cnt FROM "${safeName}"`
-    );
-    const totalCount = Number(countResult[0]?.cnt ?? 0);
+    // Count
+    const countResult: any[] = await prisma.$queryRawUnsafe(`SELECT COUNT(*) as cnt FROM "${safeName}"`);
+    const totalCount = Number(countResult[0]?.cnt ?? countResult[0]?.count ?? 0);
 
-    // Get rows
-    const rows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM "${safeName}" LIMIT ${limit}`
-    );
+    // Rows
+    const rows: any[] = await prisma.$queryRawUnsafe(`SELECT * FROM "${safeName}" LIMIT ${limit}`);
 
-    // Get indexes
-    const indexes: any[] = await prisma.$queryRawUnsafe(
-      `SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='${safeName}'`
-    );
+    // Indexes
+    const indexes: any[] = isPostgres
+      ? await prisma.$queryRawUnsafe(`SELECT indexname as name, indexdef as sql FROM pg_indexes WHERE tablename = '${safeName}'`)
+      : await prisma.$queryRawUnsafe(`SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='${safeName}'`);
 
     return NextResponse.json({
-      columns: columns.map((c: any) => ({ name: c.name, type: c.type })),
+      columns: columns.map((c: any) => ({ name: c.name, type: isPostgres ? c.type : (c.type || 'TEXT') })),
       data: rows,
       count: totalCount,
-      indexes: indexes.map((idx: any) => ({ name: idx.name, sql: idx.sql }))
+      indexes: indexes.map((idx: any) => ({ name: idx.name, sql: idx.sql || idx.indexdef }))
     });
 
   } catch (err: any) {

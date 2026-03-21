@@ -9,6 +9,20 @@ export default function Sidebar() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [lastSync, setLastSync] = useState<string>('Chargement...');
+  const [dataSource, setDataSource] = useState<'local' | 'odata'>('local');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('data_source');
+    if (saved === 'odata') setDataSource('odata');
+  }, []);
+
+  const toggleDataSource = () => {
+    const newVal = dataSource === 'local' ? 'odata' : 'local';
+    setDataSource(newVal);
+    localStorage.setItem('data_source', newVal);
+    window.dispatchEvent(new Event('dataSourceChanged'));
+    router.refresh();
+  };
 
   useEffect(() => {
     // Session
@@ -84,6 +98,28 @@ export default function Sidebar() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* DataSource Toggle */}
+      <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-800">
+        <button 
+          onClick={toggleDataSource}
+          className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-300 border ${
+            dataSource === 'odata' 
+              ? 'bg-amber-50 border-amber-200 text-amber-700 shadow-inner' 
+              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}
+        >
+          <div className="flex flex-col items-start">
+            <span className="text-[10px] font-black uppercase tracking-widest leading-none">Source de données</span>
+            <span className="text-xs font-bold mt-1">
+              {dataSource === 'odata' ? '🚀 OData (Direct)' : '⚡ DB Locale'}
+            </span>
+          </div>
+          <div className={`w-10 h-5 rounded-full p-1 transition-colors duration-300 ${dataSource === 'odata' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
+            <div className={`w-3 h-3 bg-white rounded-full transition-transform duration-300 ${dataSource === 'odata' ? 'translate-x-5' : 'translate-x-0'}`}></div>
+          </div>
+        </button>
       </div>
 
       {/* Nav */}

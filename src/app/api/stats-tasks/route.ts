@@ -5,6 +5,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
   const cabFilter = searchParams.get('cab'); // if "true", returns total for cabinet
+  const source = searchParams.get('source');
+
+  if (source === 'odata') {
+    return NextResponse.json({ counts: {} });
+  }
 
   try {
     const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');

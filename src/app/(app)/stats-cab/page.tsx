@@ -48,6 +48,17 @@ export default function StatsCabinetPage() {
   const [dgas, setDgas] = useState<{name: string, count: number}[]>([]);
   const [directions, setDirections] = useState<{name: string, count: number}[]>([]);
   const [services, setServices] = useState<{name: string, count: number}[]>([]);
+  const [dataSource, setDataSource] = useState<'local' | 'odata'>('local');
+
+  useEffect(() => {
+    const updateSource = () => {
+      const saved = localStorage.getItem('data_source') as 'local' | 'odata';
+      if (saved) setDataSource(saved);
+    };
+    updateSource();
+    window.addEventListener('dataSourceChanged', updateSource);
+    return () => window.removeEventListener('dataSourceChanged', updateSource);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -61,7 +72,8 @@ export default function StatsCabinetPage() {
           pole: poleFilter,
           dga: dgaFilter,
           dir: dirFilter,
-          service: serviceFilter
+          service: serviceFilter,
+          source: dataSource
         });
         const res = await fetch(`/api/stats/cabinet-v2?${params}`);
         const json = await res.json();
@@ -141,7 +153,14 @@ export default function StatsCabinetPage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Tableau de Bord Cabinet</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight text-nowrap">Tableau de Bord Cabinet</h1>
+                {dataSource === 'odata' ? (
+                  <span className="text-[9px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">LIVE ODATA 🚀</span>
+                ) : (
+                  <span className="text-[9px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">LOCAL DB ⚡</span>
+                )}
+              </div>
               <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">{year} • Filtres Actifs</p>
             </div>
             

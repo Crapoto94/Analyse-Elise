@@ -7,6 +7,8 @@ import { prismaEntities, prismaSystem } from '@/lib/prisma';
  * - Muni = Documents assigned to Cabinet or Elected officials (Path starting with 1|134)
  * - Courant = Documents assigned to Administration (DGS) (Path starting with 1|269)
  */
+import { fetchCabinetStats } from '@/lib/odata-direct';
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const yearVal = parseInt(searchParams.get('year') || '0');
@@ -17,6 +19,16 @@ export async function GET(req: Request) {
   const dga = searchParams.get('dga');
   const dir = searchParams.get('dir');
   const service = searchParams.get('service');
+  const source = searchParams.get('source');
+  
+  if (source === 'odata') {
+    try {
+      const stats = await fetchCabinetStats(yearVal || new Date().getFullYear(), monthVal);
+      return NextResponse.json({ ...stats, type });
+    } catch (err: any) {
+      return NextResponse.json({ error: 'OData Direct Error: ' + err.message }, { status: 500 });
+    }
+  }
 
   try {
     const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
