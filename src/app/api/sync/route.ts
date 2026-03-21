@@ -62,7 +62,9 @@ async function ensureTable(tableName: string, cols: { name: string; type: string
  * Bulk upsert items (IN ENTITIES DB)
  */
 async function bulkUpsert(tableName: string, items: any[], allCols: { name: string; type: string }[], isPostgres: boolean): Promise<void> {
-  const BATCH_SIZE = isPostgres ? 100 : 500;
+  // Use a very small batch size for major tables to avoid any parameter or memory limits
+  // 10 rows with 50 columns = 500 parameters (Very safe for all DBs)
+  const BATCH_SIZE = 10; 
   const colNames = ['_sync_date', ...allCols.map(c => c.name)];
   const colNamesStr = colNames.map(n => `"${n}"`).join(', ');
   
@@ -82,31 +84,44 @@ async function bulkUpsert(tableName: string, items: any[], allCols: { name: stri
       const rowP: string[] = [];
       
       // _sync_date
-      rowP.push(isPostgres ? `$${paramCount++}::TEXT` : '?');
+      rowP.push(isPostgres ? `$${paramCount++}` : '?');
       values.push(nowStr);
 
       for (const col of allCols) {
-        rowP.push(isPostgres ? `$${paramCount++}::${col.type}` : '?');
+        // We use explicit casting only if needed, otherwise let the driver handle nulls
+        rowP.push(isPostgres ? `$${paramCount++}` : '?');
+        
         if (col.name === '_external_id') {
-          values.push(item._external_id);
+          values.push(String(item._external_id)); 
         } else {
-          const val = item[col.name];
-          values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
+          let val = item[col.name];
+          if (val === undefined) val = null;
+          
+          if (col.type === 'BOOLEAN' && val !== null) {
+            values.push(val === true || val === 'true' || val === 1);
+          } else if ((col.type === 'REAL' || col.type === 'DOUBLE PRECISION') && val !== null) {
+            const num = Number(val);
+            values.push(isNaN(num) ? null : num);
+          } else {
+            values.push(val !== null && typeof val === 'object' ? JSON.stringify(val) : (val ?? null));
+          }
         }
       }
       placeholders.push(`(${rowP.join(', ')})`);
     }
 
-    const query = isPostgres 
-      ? `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`
-      : `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`;
-      // Note: SQLite supports ON CONFLICT since 3.24.0, which works like Postgres. 
-      // UPSERT syntax is identical for simple cases.
+    const query = `INSERT INTO "${tableName}" (${colNamesStr}) VALUES ${placeholders.join(', ')} ON CONFLICT ("_external_id") DO UPDATE SET ${updateSet}`;
 
     try {
       await prismaEntities.$executeRawUnsafe(query, ...values);
     } catch (err: any) {
-      console.error(`[bulkUpsert] Error on ${tableName} (Postgres: ${isPostgres}):`, err.message);
+      console.error(`[bulkUpsert] FATAL Error on ${tableName}:`, {
+        message: err.message,
+        isPostgres,
+        itemCount: chunk.length,
+        paramsCount: values.length,
+        queryStart: query.substring(0, 500)
+      });
       throw err;
     }
   }
@@ -232,9 +247,14 @@ export async function POST(req: Request) {
           totalCount += count;
 
         } catch (err: any) {
+          const is404 = err.message?.includes('404') || err.status === 404;
           console.error(`[Sync] Error syncing ${entity}:`, err.message);
           entityStats[entity] = -1;
-          send({ type: 'entity_error', entity, error: err.message });
+          send({ 
+            type: 'entity_error', 
+            entity, 
+            error: is404 ? 'Non exporté (404)' : err.message 
+          });
         }
       }
 
