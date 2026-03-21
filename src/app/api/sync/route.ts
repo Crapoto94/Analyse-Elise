@@ -78,7 +78,7 @@ async function bulkUpsert(tableName: string, items: any[], allCols: { name: stri
     try {
       await executeBatch(tableName, chunk, allCols, isPostgres, colNamesStr, updateSet);
     } catch (err: any) {
-      console.warn(`[bulkUpsert] Batch failed for ${tableName}, retrying one by one...`);
+      console.warn(`[bulkUpsert] Batch failed for ${tableName} (${chunk.length} items): ${err.message}. Retrying one by one...`);
       // Fallback: try one by one to find the culprit and continue
       for (const item of chunk) {
         try {
@@ -209,7 +209,8 @@ export async function POST(req: Request) {
       const entityStats: Record<string, number> = {};
       let totalCount = 0;
 
-      const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
+      const isPostgres = process.env.DATABASE_URL_ENTITIES?.includes('postgres');
+      console.log(`[Sync] Starting sync. Target is ${isPostgres ? 'PostgreSQL' : 'SQLite'}`);
 
       for (let i = 0; i < allEntities.length; i++) {
         const entity = allEntities[i];
@@ -220,8 +221,10 @@ export async function POST(req: Request) {
         try {
           let count = 0;
           let nextUrl: string | null = entity;
+          let tableEnsured = false;
 
           while (nextUrl) {
+            console.log(`[Sync] Fetching ${entity} bundle...`);
             const res = (await (client as any).request(nextUrl)) as any;
             const items: any[] = res.value || [];
 
@@ -235,7 +238,12 @@ export async function POST(req: Request) {
 
               const cols = inferColumns(sampleMerged, !!isPostgres);
               const allCols = [{ name: '_external_id', type: 'TEXT' }, ...cols];
-              await ensureTable(tableName, allCols, !!isPostgres);
+              
+              if (!tableEnsured) {
+                console.log(`[Sync] Ensuring table ${tableName}...`);
+                await ensureTable(tableName, allCols, !!isPostgres);
+                tableEnsured = true;
+              }
 
               for (let k = 0; k < items.length; k++) {
                 const item = items[k];
@@ -244,6 +252,7 @@ export async function POST(req: Request) {
                   : `row_${count + k}_${Math.random().toString(36).substr(2, 6)}`;
               }
 
+              console.log(`[Sync] Upserting ${items.length} items to ${tableName}...`);
               await bulkUpsert(tableName, items, allCols, !!isPostgres);
               count += items.length;
             }
