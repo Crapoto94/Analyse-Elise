@@ -15,11 +15,15 @@ export async function createSession(user: { email: string, role: string }) {
   const signature = crypto.createHmac('sha256', AUTH_SECRET).update(sessionData).digest('hex');
   const sessionToken = Buffer.from(JSON.stringify({ data: sessionData, sig: signature })).toString('base64');
 
+  const isSecure = process.env.SESSION_SECURE !== undefined 
+    ? process.env.SESSION_SECURE === 'true'
+    : process.env.NODE_ENV === 'production';
+
   const cookieStore = await cookies();
   cookieStore.set('elise_session', sessionToken, {
     expires,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecure,
     sameSite: 'lax',
     path: '/',
   });

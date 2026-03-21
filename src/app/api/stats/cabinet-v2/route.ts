@@ -154,23 +154,29 @@ export async function GET(req: Request) {
     allDocs.forEach(doc => {
       const isMuni = muniDocSet.has(doc.Id);
       const isCourant = courantDocSet.has(doc.Id);
-      if (type === 'muni' && !isMuni) return;
-      if (type === 'courant' && !isCourant) return;
+      
+      // RULE: Muni Priority for single attribution
+      const finalCategory = isMuni ? 'muni' : (isCourant ? 'courant' : 'other');
+      
+      // Filtering based on selected type
+      if (type === 'muni' && finalCategory !== 'muni') return;
+      if (type === 'courant' && finalCategory !== 'courant') return;
+      // Note: "all" shows everything regardless of category
       
       stats.total++;
       const date = new Date(doc.CreatedDate);
       const month = date.getMonth();
       
-      // Secondary safety check (already filtered in SQL if yearVal > 0)
       if (monthVal !== 'all' && (month + 1) !== parseInt(monthVal)) return;
 
       const yr = date.getFullYear();
       const monthKey = yearVal === 0 ? `${yr}-${(month + 1).toString().padStart(2, '0')}` : `${(month + 1).toString().padStart(2, '0')}`;
       
       if (month >= 0 && month < 12) stats.byMonth[month]++;
-      if (isMuni) stats.muniCount++;
-      if (isCourant) stats.courantCount++;
-      if (isMuni && isCourant) stats.sharedCount++;
+      
+      if (finalCategory === 'muni') stats.muniCount++;
+      else if (finalCategory === 'courant') stats.courantCount++;
+      if (isMuni && isCourant) stats.sharedCount++; // Keep tracking shared count for info
       
       const stateId = doc.StateId || -1;
       const closureId = doc.ClosureReasonId || -1;

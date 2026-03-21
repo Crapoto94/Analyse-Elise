@@ -32,6 +32,7 @@ services:
     environment:
       - DATABASE_URL_SYSTEM=file:/app/data/system.db
       - DATABASE_URL_ENTITIES=postgresql://postgres:postgres@db:5432/app_entities?schema=public
+      - SESSION_SECURE=false
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
       - PORT=5002
