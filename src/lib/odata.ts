@@ -119,7 +119,22 @@ export class ODataClient {
 
   public async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const isAbsolute = path.startsWith('http://') || path.startsWith('https://');
-    const targetUrl = isAbsolute ? path : `${this.config.baseUrl}${path.startsWith('/') ? path.slice(1) : path}`;
+    let targetUrl = '';
+    
+    if (isAbsolute) {
+      targetUrl = path;
+    } else {
+      // Split path and query
+      const [pathPart, ...queryParts] = path.split('?');
+      const query = queryParts.length > 0 ? `?${queryParts.join('?')}` : '';
+      
+      // Encode path parts (like 'Attachment Type' -> 'Attachment%20Type')
+      const encodedPath = pathPart.split('/').map(segment => encodeURIComponent(segment)).join('/');
+      
+      const base = this.config.baseUrl;
+      const cleanPath = encodedPath.startsWith('/') ? encodedPath.slice(1) : encodedPath;
+      targetUrl = `${base}${cleanPath}${query}`;
+    }
     
     const response = await this.fetchWithProxy(targetUrl, options);
     

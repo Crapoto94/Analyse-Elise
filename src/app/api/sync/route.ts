@@ -224,7 +224,7 @@ export async function POST(req: Request) {
           let tableEnsured = false;
 
           while (nextUrl) {
-            console.log(`[Sync] Fetching ${entity} bundle...`);
+            console.log(`[Sync] Requesting items for ${entity}...`);
             const res = (await (client as any).request(nextUrl)) as any;
             const items: any[] = res.value || [];
 
