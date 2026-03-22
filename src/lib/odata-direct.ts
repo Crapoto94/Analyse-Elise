@@ -307,10 +307,12 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         
         if (uniqueDocsInEntity.size > 0) {
           map[name] = uniqueDocsInEntity.size;
-          // Marquer ces docs comme "vus" pour les autres entités de ce niveau
           uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
         }
       });
+      
+      const totalSum = Object.values(map).reduce((a, b) => a + b, 0);
+      console.log(`[DEBUG HIERARCHY] Total unique docs seen in this level (${level}): ${globallySeenInThisLevel.size} | Sum of map: ${totalSum}`);
 
       return Object.entries(map)
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
