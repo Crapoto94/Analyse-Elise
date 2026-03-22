@@ -4,17 +4,29 @@ import { ODataClient } from '@/lib/odata';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const userName = searchParams.get('name') || "Isabelle ABBAS"; // Exemple par défaut
-  const year = 2024;
+  const userName = searchParams.get('name') || "Isabelle ABBAS";
+  const yearInput = searchParams.get('year');
+  const year = yearInput ? parseInt(yearInput) : 2024;
   
   const config = await getODataConfig();
   const client = new ODataClient(config);
 
   try {
-    // 1. Trouver l'ID de structure de l'utilisateur
-    const structRes = await client.requestAll<any>(`DimStructureElement?$filter=Name eq '${userName}'&$select=Id,Name`);
-    if (structRes.length === 0) return NextResponse.json({ error: `Utilisateur '${userName}' non trouvé` });
-    const userId = structRes[0].Id;
+    // 1. Recherche souple de l'utilisateur
+    const searchPart = userName.toLowerCase();
+    const structRes = await client.requestAll<any>(`DimStructureElement?$filter=contains(tolower(Name), '${searchPart}')&$select=Id,Name`);
+    
+    if (structRes.length === 0) {
+      // Deuxième essai : lister les 10 premiers pour aider l'utilisateur
+      const samples = await client.request<any>(`DimStructureElement?$top=10&$select=Name`);
+      return NextResponse.json({ 
+        error: `Utilisateur '${userName}' non trouvé`, 
+        suggestions: samples.value.map((s: any) => s.Name)
+      });
+    }
+    
+    const matched = structRes[0];
+    const userId = matched.Id;
 
     // 2. Chercher les documents où il est DirectionId (Base hybride)
     const docFilter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year+1}-01-01T00:00:00Z and DirectionId eq ${userId}`;

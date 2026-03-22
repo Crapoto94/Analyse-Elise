@@ -85,18 +85,10 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         }
       });
 
-      // Attribution Hybride (identique à fetchDirectHierarchy)
+      // Attribution STRICTE Tâches (Nouveau modèle v0.1.33)
       const docToAssignment = new Map<number, any>();
       
-      // 1. Base: DirectionId du document
-      docs.forEach((d: any) => {
-        if (d.DirectionId) {
-          const path = pathMap.get(d.DirectionId);
-          if (path) docToAssignment.set(d.Id, path);
-        }
-      });
-
-      // 2. Surcharge: Tâche la plus RECENTE
+      // Surcharge: Tâche la plus RECENTE
       taskDocs.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
         if (path) docToAssignment.set(t.DocumentId, path);
@@ -105,7 +97,7 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
       const initialCount = docs.length;
       docs = docs.filter((d: any) => {
         const path = docToAssignment.get(d.Id);
-        if (!path) return false;
+        if (!path) return false; // On ne compte que les docs ayant une tâche d'exécution
         
         if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
         if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
@@ -113,7 +105,7 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         if (filters.service !== 'all' && path.service !== filters.service) return false;
         return true;
       });
-      console.log(`[DEBUG STATS] Filtered docs from ${initialCount} to ${docs.length}`);
+      console.log(`[DEBUG STATS] Strict Task Filter: ${initialCount} -> ${docs.length}`);
     }
 
     const totalTasks = 0; // Désactivé pour performance (Focus Courriers)
@@ -200,22 +192,21 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       name: s.LabelFrFr || s.Label
     }));
 
-    // 4. Attribution Hybride
-    // On commence par DirectionId du document (présent même sans tâche)
+    // 4. Attribution STRICTE Tâches (v0.1.35) - Fini le DirectionId polluant
     const docToElement: Record<number, number> = {};
-    yearDocs.forEach((d: any) => {
-      if (d.DirectionId) docToElement[d.Id] = d.DirectionId;
-    });
-
-    // On surcharge avec la tâche la plus RECENTE si elle existe (plus précis)
-    taskDocs.sort((a: any, b: any) => b.TaskNumber - a.TaskNumber).forEach((t: any) => {
-      // On ne l'affecte que si le doc appartient bien à notre set filtré
-      if (docToElement.hasOwnProperty(t.DocumentId)) {
+    const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
+    
+    // On ne prend QUE les tâches d'exécution
+    taskDocs.forEach((t: any) => {
+      // Le dernier task (orderby desc) gagne pour l'attribution
+      if (yearDocIds.has(t.DocumentId) && !docToElement[t.DocumentId]) {
         docToElement[t.DocumentId] = t.AssignedToStructureElementId;
       }
     });
 
-    const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
+
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
 
     // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
     const allPaths: any[] = [];
