@@ -205,21 +205,19 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       name: s.LabelFrFr || s.Label
     }));
 
-    // 4. Attribution STRICTE Tâches (v0.1.35) - Fini le DirectionId polluant
-    const docToElement: Record<number, number> = {};
+    // 4. Attribution Tâches - Permettre la multi-affectation
+    const docToElements: Record<number, Set<number>> = {};
     const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
     
-    // On ne prend QUE les tâches d'exécution
+    // Un document obtient +1 point de comptage pour CHAQUE Direction qui a eu la tâche
     taskDocs.forEach((t: any) => {
-      // Le dernier task (orderby desc) gagne pour l'attribution
-      if (yearDocIds.has(t.DocumentId) && !docToElement[t.DocumentId]) {
-        docToElement[t.DocumentId] = t.AssignedToStructureElementId;
+      if (yearDocIds.has(t.DocumentId)) {
+        if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = new Set();
+        docToElements[t.DocumentId].add(t.AssignedToStructureElementId);
       }
     });
 
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
-
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElements: ${Object.keys(docToElements).length}`);
 
     // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
     const allPaths: any[] = [];
@@ -236,12 +234,15 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
 
     const countsByElementId: Record<number, Set<number>> = {};
-    Object.entries(docToElement).forEach(([docId, elementId]) => {
-      if (!countsByElementId[elementId]) countsByElementId[elementId] = new Set();
-      countsByElementId[elementId].add(parseInt(docId));
+    Object.entries(docToElements).forEach(([docIdStr, elementIds]) => {
+      const docId = parseInt(docIdStr);
+      elementIds.forEach(elementId => {
+         if (!countsByElementId[elementId]) countsByElementId[elementId] = new Set();
+         countsByElementId[elementId].add(docId);
+      });
     });
 
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | affected docs count: ${Object.keys(docToElements).length}`);
     const sampleIds = Array.from(yearDocIds).slice(0, 5);
     console.log(`[DEBUG COUNTS] sample yearDocIds: ${sampleIds.join(', ')}`);
 
@@ -321,20 +322,13 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 
       // 3. Calcul final des comptes uniques par entité
       const map: Record<string, number> = {};
-      
-      // On veut que la somme des entités soit cohérente avec le total global.
-      // Un document ne doit pas être compté deux fois dans deux entités différentes DU MÊME NIVEAU.
-      const globallySeenInThisLevel = new Set<number>();
 
-      // On traite les entités dans l'ordre (le premier qui "prend" le doc le garde)
       Object.entries(idsByName).forEach(([name, idSet]) => {
         const uniqueDocsInEntity = new Set<number>();
         idSet.forEach(structId => {
           if (countsByElementId[structId]) {
             countsByElementId[structId].forEach(docId => {
-              if (!globallySeenInThisLevel.has(docId)) {
-                uniqueDocsInEntity.add(docId);
-              }
+               uniqueDocsInEntity.add(docId);
             });
           }
         });
@@ -342,13 +336,9 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         // N'inclure que les éléments avec au moins 1 affectation
         if (uniqueDocsInEntity.size > 0) {
           map[name] = uniqueDocsInEntity.size;
-          uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
         }
       });
       
-      const totalSum = Object.values(map).reduce((a, b) => a + b, 0);
-      console.log(`[DEBUG HIERARCHY] Total unique docs seen in this level (${level}): ${globallySeenInThisLevel.size} | Sum of map: ${totalSum}`);
-
       return Object.entries(map)
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([name, count]) => ({ name, count }));
