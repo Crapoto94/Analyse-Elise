@@ -133,7 +133,7 @@ export default function Sidebar() {
            <div className="px-2 pb-2">
               <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">
                  (c) Direction des Systèmes d'Informations<br/>
-                  <span className="text-blue-600">Marc CHEVALIER</span> — <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[7px]">v0.1.28</span>
+                  <span className="text-blue-600">Marc CHEVALIER</span> — <span className="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-[7px]">v0.1.29</span>
               </p>
            </div>
 

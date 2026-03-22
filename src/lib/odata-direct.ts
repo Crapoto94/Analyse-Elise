@@ -72,27 +72,37 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         lastCacheUpdate = Date.now();
       }
 
+      // Dédoublonnage des chemins
       const pathMap = new Map();
       allPathsRaw.forEach((p: any) => {
-        pathMap.set(p.Id, {
-          pole: p.Level2?.trim(),
-          dga: p.Level3?.trim(),
-          dir: p.Level4?.trim(),
-          service: p.Level5?.trim()
-        });
-      });
-
-      // Attribution : On prend la tâche la plus RECENTE (orderby desc) pour chaque doc
-      const docToAssignment = new Map<number, any>();
-      const yearDocIds = new Set(docs.map((d: any) => d.Id));
-
-      taskDocs.forEach((t: any) => {
-        if (yearDocIds.has(t.DocumentId) && !docToAssignment.has(t.DocumentId)) {
-          const path = pathMap.get(t.AssignedToStructureElementId);
-          if (path) docToAssignment.set(t.DocumentId, path);
+        if (!pathMap.has(p.Id)) {
+          pathMap.set(p.Id, {
+            pole: p.Level2?.trim(),
+            dga: p.Level3?.trim(),
+            dir: p.Level4?.trim(),
+            service: p.Level5?.trim()
+          });
         }
       });
 
+      // Attribution Hybride (identique à fetchDirectHierarchy)
+      const docToAssignment = new Map<number, any>();
+      
+      // 1. Base: DirectionId du document
+      docs.forEach((d: any) => {
+        if (d.DirectionId) {
+          const path = pathMap.get(d.DirectionId);
+          if (path) docToAssignment.set(d.Id, path);
+        }
+      });
+
+      // 2. Surcharge: Tâche la plus RECENTE
+      taskDocs.forEach((t: any) => {
+        const path = pathMap.get(t.AssignedToStructureElementId);
+        if (path) docToAssignment.set(t.DocumentId, path);
+      });
+
+      const initialCount = docs.length;
       docs = docs.filter((d: any) => {
         const path = docToAssignment.get(d.Id);
         if (!path) return false;
@@ -103,6 +113,7 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         if (filters.service !== 'all' && path.service !== filters.service) return false;
         return true;
       });
+      console.log(`[DEBUG STATS] Filtered docs from ${initialCount} to ${docs.length}`);
     }
 
     const totalTasks = 0; // Désactivé pour performance (Focus Courriers)
