@@ -189,12 +189,17 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       id: s.Id,
       name: s.LabelFrFr || s.Label
     }));
-    const allPaths = allPathsRaw;
-    // Log pour diagnostiquer les types sur Proxmox
-    const uniqueTypes = [...new Set(allPaths.map((p: any) => p.StructureElementTypeKey))];
-    console.log(`[HIERARCHY DEBUG] Unique types: ${uniqueTypes.join(', ')}`);
+    // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
+    const allPaths: any[] = [];
+    const seenElementIds = new Set<number>();
+    allPathsRaw.forEach((p: any) => {
+      if (!seenElementIds.has(p.Id)) {
+        seenElementIds.add(p.Id);
+        allPaths.push(p);
+      }
+    });
     
-    // Filtrage plus souple : les services OU ce qui n'a pas de type (souvent les pôles racines)
+    // Filtrage sur les chemins uniques
     const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
 
     // 4. Attribution : Chaque document est affecté à sa DERNIÈRE tâche de traitement (la plus récente)
@@ -213,6 +218,8 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       if (!countsByElementId[elementId]) countsByElementId[elementId] = new Set();
       countsByElementId[elementId].add(parseInt(docId));
     });
+
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
 
     const getHierarchyWithCounts = (level: string, currentFilters?: any) => {
       const idsByName: Record<string, Set<number>> = {};
