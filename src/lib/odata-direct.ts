@@ -254,27 +254,29 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 
       // 2. AJOUT des catégories spéciales au niveau SERVICE (Level5)
       if (level === 'Level5' && currentFilters?.dir && currentFilters.dir !== 'all') {
-        const directLabel = `(Affectations directes ${currentFilters.dir})`;
+        const directLabel = `(Affectations directes)`;
         idsByName[directLabel] = new Set();
         
         allPaths.forEach((p: any) => {
           if (p.Level4?.trim() === currentFilters.dir) {
-             // Cas 1: Affectation directe à la Direction (SERVICE sans Level 5)
-             if (!p.Level5 && p.StructureElementTypeKey === 'SERVICE') {
+             const typeKey = (p.StructureElementTypeKey || '').toUpperCase();
+
+             // Cas 1: Affectation directe à la Direction (pas de Level5 → ID du service/direction lui-même)
+             if (!p.Level5) {
                 idsByName[directLabel].add(p.Id);
              }
-             // Cas 2: Individus (USER)
-             if (p.StructureElementTypeKey === 'USER') {
-                const userName = (p.Level5 || p.Level6 || p.Level4 || "Agent Individuel").trim();
-                // On s'assure que le nom ne soit pas le même que la direction pour éviter la confusion
+             // Cas 2: Individus (USER ou type inconnu avec Level5/6 renseigné)
+             else if (typeKey === 'USER' || (typeKey !== 'SERVICE' && p.Level5)) {
+                const userName = (p.Level5 || p.Level6 || "Agent Individuel").trim();
                 const finalName = (userName === currentFilters.dir) ? `${userName} (Individuel)` : userName;
                 if (!idsByName[finalName]) idsByName[finalName] = new Set();
                 idsByName[finalName].add(p.Id);
              }
-             // Cas 3: Services standards (déjà dans validNames mais on ajoute leurs Ids ici)
-             if (p.Level5 && p.StructureElementTypeKey === 'SERVICE') {
+             // Cas 3: Services standards (Level5 + type SERVICE ou vide)
+             else if (p.Level5 && (typeKey === 'SERVICE' || typeKey === '')) {
                 const sName = p.Level5.trim();
-                if (idsByName[sName]) idsByName[sName].add(p.Id);
+                if (!idsByName[sName]) idsByName[sName] = new Set();
+                idsByName[sName].add(p.Id);
              }
           }
         });
