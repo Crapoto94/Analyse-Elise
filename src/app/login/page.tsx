@@ -95,7 +95,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-8 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest opacity-50">
-          OData BI Gateway v0.1.29
+          OData BI Gateway v0.1.30
         </p>
       </div>
     </div>

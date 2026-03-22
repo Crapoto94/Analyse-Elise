@@ -27,7 +27,6 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'sql', label: 'Base de données', icon: '🗄️' },
-    { id: 'logs', label: 'Sync Logs', icon: '📜' },
     { id: 'users', label: 'Utilisateurs', icon: '👥' },
     { id: 'config', label: 'Connexion OData', icon: '☁️' }
   ];
@@ -55,12 +54,6 @@ export default function SettingsPage() {
 
       <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-2xl shadow-gray-200/50 dark:shadow-none min-h-[600px] overflow-hidden">
         {activeTab === 'sql' && <RestoredSqlExplorer />}
-        {activeTab === 'logs' && <div className="p-20 text-center space-y-4">
-          <div className="text-4xl">📜</div>
-          <h2 className="text-xl font-black uppercase tracking-tight">Logs de Synchronisation</h2>
-          <p className="text-gray-500 max-w-md mx-auto">L&apos;historique complet des synchronisations et des logs système est désormais disponible sur la page dédiée.</p>
-          <button onClick={() => router.push('/connect')} className="px-8 py-3 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-blue-500/20">Aller aux Logs</button>
-        </div>}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'config' && <div className="p-20 text-center space-y-4">
           <div className="text-4xl">☁️</div>
@@ -190,144 +183,6 @@ function RestoredSqlExplorer() {
   )
 }
 
-// --------------------------------------------------------------------------------
-// 2. SYNC LOGS TAB
-// --------------------------------------------------------------------------------
-function SyncLogsTab() {
-  const [logs, setLogs] = useState<any[]>([]);
-  useEffect(() => {
-    fetch('/api/sync-logs').then(res => res.json()).then(setLogs);
-  }, []);
-
-  const [optimizing, setOptimizing] = useState(false);
-  const [optLogs, setOptLogs] = useState<{ step: string; message: string }[]>([]);
-
-  return (
-    <div className="p-10 space-y-8">
-      <div className="flex justify-between items-center">
-         <h2 className="text-2xl font-black uppercase tracking-tight">Historique de Synchronisation</h2>
-         <div className="flex gap-4 items-center">
-            <button 
-              disabled={optimizing}
-              onClick={async (e) => {
-                setOptimizing(true);
-                setOptLogs([]);
-                try {
-                  const res = await fetch('/api/sync/optimize', { method: 'POST' });
-                  if (!res.body) return;
-                  
-                  const reader = res.body.getReader();
-                  const decoder = new TextDecoder();
-                  let buffer = '';
-
-                  while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
-
-                    for (const line of lines) {
-                      if (!line.trim()) continue;
-                      const data = JSON.parse(line);
-                      setOptLogs(prev => [...prev, data]);
-                    }
-                  }
-                } catch (err: any) {
-                  alert(`Erreur fatale: ${err.message}`);
-                } finally {
-                  setOptimizing(false);
-                }
-              }}
-              className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg hover:scale-105 transition-all disabled:opacity-50"
-            >
-              {optimizing ? '⏳ Optimisation...' : '⚡ Optimiser la Base'}
-            </button>
-            <button 
-              id="repair-dimensions-btn"
-              onClick={async (e) => {
-                const btn = e.currentTarget;
-                const originalText = btn.innerText;
-                btn.innerText = '⏳ Réparation...';
-                btn.disabled = true;
-                try {
-                  const confRes = await fetch('/api/config');
-                  const conf = await confRes.json();
-                  if (!conf.ODATA_URL) return alert('Configurez OData d\'abord');
-                  
-                  const res = await fetch('/api/sync/dimensions', { method: 'POST', body: JSON.stringify({ config: conf }) });
-                  const data = await res.json();
-                  
-                  if (res.ok) {
-                    const detail = Object.entries(data.stats || {}).map(([k,v]) => `${k}: ${v}`).join('\n');
-                    alert(`Réparation terminée (Hiérarchie complète) !\n\n${detail}`);
-                  } else {
-                    alert(`Erreur: ${data.error || 'Inconnue'}`);
-                  }
-                } catch (err: any) {
-                  alert(`Erreur fatale: ${err.message}`);
-                } finally {
-                  btn.innerText = originalText;
-                  btn.disabled = false;
-                }
-              }}
-              className="px-4 py-2 bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg hover:scale-105 transition-all disabled:opacity-50"
-            >
-              🔧 Réparer les Dimensions
-            </button>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Opérations de Maintenance</span>
-         </div>
-      </div>
-
-      {optLogs.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 font-mono text-[10px] space-y-1 max-h-[200px] overflow-y-auto shadow-2xl">
-          <div className="text-gray-500 mb-2 font-black uppercase tracking-widest text-[8px] flex justify-between">
-            <span>Console d&apos;optimisation</span>
-            {optimizing && <span className="animate-pulse text-indigo-400 italic">En cours...</span>}
-          </div>
-          {optLogs.map((log, i) => (
-            <div key={i} className="flex gap-3">
-              <span className="text-indigo-500">[{log.step}]</span>
-              <span className={log.step === 'error' ? 'text-red-400' : log.step === 'done' ? 'text-green-400 font-black uppercase' : 'text-gray-300'}>
-                {log.message}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-3xl border border-gray-100 dark:border-gray-700">
-        <table className="min-w-full text-xs">
-          <thead className="bg-gray-50 dark:bg-gray-900 text-[10px] font-black uppercase tracking-widest text-gray-400">
-            <tr>
-              <th className="px-6 py-4 text-left">Statut</th>
-              <th className="px-6 py-4 text-left">Début</th>
-              <th className="px-6 py-4 text-left">Dossiers</th>
-              <th className="px-6 py-4 text-left">Tâches</th>
-              <th className="px-6 py-4 text-left">Durée</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-            {logs.map((log: any) => (
-              <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/20 transition-all font-medium">
-                <td className="px-6 py-4">
-                  <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${log.status === 'SUCCESS' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                    {log.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-gray-900 dark:text-gray-200">{new Date(log.startTime).toLocaleString('fr-FR')}</td>
-                <td className="px-6 py-4 font-bold">{log.docsCount}</td>
-                <td className="px-6 py-4 font-bold">{log.tasksCount}</td>
-                <td className="px-6 py-4 text-gray-400">{Math.round(log.durationMs / 1000)}s</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 // --------------------------------------------------------------------------------
 // 3. USERS TAB
