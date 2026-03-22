@@ -440,9 +440,8 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       docs = docs.filter((doc: any) => {
         // Filter by status
         if (filters.status && filters.status !== 'all') {
-          if (filters.status === 'cloture' && doc.StateId !== 46) return false;
-          if (filters.status === 'en_cours' && doc.StateId === 46) return false;
-          if (filters.status === 'traite' && doc.StateId !== 45) return false;
+          const statusId = parseInt(filters.status);
+          if (doc.StateId !== statusId) return false;
         }
 
         // Filter by hierarchy (Si un document a AU MOINS UNE TACHE qui matche le filtre, on le garde)
@@ -590,6 +589,15 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
         if (diff >= 0) {
           totalDelayDays += diff;
           closedCount++;
+          if (diff <= 30) entrants.deadlines.within30++;
+          else if (diff <= 60) entrants.deadlines.within60++;
+          else entrants.deadlines.exceeded++;
+        }
+      } else if (doc.StateId !== 45 && doc.StateId !== 46) {
+        // En Cours
+        const today = new Date();
+        const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (diff >= 0) {
           if (diff <= 30) entrants.deadlines.within30++;
           else if (diff <= 60) entrants.deadlines.within60++;
           else entrants.deadlines.exceeded++;

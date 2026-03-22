@@ -30,7 +30,6 @@ const CompactStatsCard = ({ title, value, icon, color }: { title: string, value:
 
 export default function StatsCabinetPage() {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [type, setType] = useState('all');
   const [month, setMonth] = useState('all');
   const [status, setStatus] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -54,7 +53,6 @@ export default function StatsCabinetPage() {
     try {
       const params = new URLSearchParams({
         year: String(year),
-        type,
         month,
         status,
         pole: poleFilter,
@@ -94,7 +92,7 @@ export default function StatsCabinetPage() {
 
   useEffect(() => {
     fetchData();
-  }, [year, type, month, status, poleFilter, dgaFilter, dirFilter, serviceFilter]);
+  }, [year, month, status, poleFilter, dgaFilter, dirFilter, serviceFilter]);
 
   if (loading || !data) {
     return (
@@ -132,17 +130,8 @@ export default function StatsCabinetPage() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 8);
 
-  // Filter assignments based on classification toggle
-  const filteredAssignments = (assignments || []).filter((a: any) => {
-    if (type === 'all') return true;
-    const isMuni = a.direction?.startsWith('CABINET DU MAIRE');
-    if (type === 'muni') return isMuni;
-    if (type === 'courant') return !isMuni;
-    return true;
-  });
-
   // Group assignments by Direction
-  const groupedAssignments = filteredAssignments.reduce((acc: any, curr: any) => {
+  const groupedAssignments = (assignments || []).reduce((acc: any, curr: any) => {
     const dirKey = curr.direction || 'Pôle DGS (Transverse)';
     if (!acc[dirKey]) {
       acc[dirKey] = {
@@ -212,27 +201,7 @@ export default function StatsCabinetPage() {
                   </select>
                </div>
 
-               {/* Classification Toggle */}
-               <div className="flex bg-white dark:bg-gray-800 p-1 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                  <button 
-                    onClick={() => setType('muni')}
-                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${type === 'muni' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-                  >
-                    Muni
-                  </button>
-                  <button 
-                    onClick={() => setType('all')}
-                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${type === 'all' ? 'bg-gray-900 text-white dark:bg-white dark:text-black' : 'text-gray-400 hover:bg-gray-50'}`}
-                  >
-                    Tout
-                  </button>
-                  <button 
-                    onClick={() => setType('courant')}
-                    className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${type === 'courant' ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:bg-gray-50'}`}
-                  >
-                    Courant
-                  </button>
-               </div>
+
             </div>
           </div>
 
@@ -452,8 +421,8 @@ export default function StatsCabinetPage() {
           {(() => {
              const success = (entrants?.deadlines?.within30 || 0) + (entrants?.deadlines?.within60 || 0);
              const failed = (entrants?.deadlines?.exceeded || 0);
-             const totalClosed = success + failed;
-             const ratio = totalClosed > 0 ? Math.round((success / totalClosed) * 100) : 0;
+             const totalEvalues = success + failed;
+             const ratio = totalEvalues > 0 ? Math.round((success / totalEvalues) * 100) : 0;
              return (
                <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 flex flex-col justify-center">
                   <div className="flex justify-between mb-2">
@@ -468,7 +437,7 @@ export default function StatsCabinetPage() {
                        style={{ width: `${ratio}%` }}
                      ></div>
                   </div>
-                  <p className="text-[8px] text-gray-400 mt-2 text-right uppercase tracking-wider">Sur {totalClosed} dossiers clôturés</p>
+                  <p className="text-[8px] text-gray-400 mt-2 text-right uppercase tracking-wider">Sur {totalEvalues} dossiers (clôturés et en cours)</p>
                </div>
              );
           })()}
