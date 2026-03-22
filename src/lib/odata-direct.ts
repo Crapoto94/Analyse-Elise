@@ -167,7 +167,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${endDate} and TaskProcessingTypeId eq 114`;
     
     const [yearDocs, statesRaw, allPathsRaw, taskDocs] = await Promise.all([
-      client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id`), // Pas besoin de DirectionId ici
+      client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,DirectionId`), 
       (cachedStatuses && Date.now() - lastCacheUpdate < CACHE_TTL) 
         ? Promise.resolve({ value: cachedStatuses }) 
         : client.request<any>('DimDocumentState?$select=Id,LabelFrFr'),
@@ -184,35 +184,27 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       lastCacheUpdate = Date.now();
     }
 
-    const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
     const statuses = (statesRaw.value || []).map((s: any) => ({
       id: s.Id,
       name: s.LabelFrFr || s.Label
     }));
-    // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
-    const allPaths: any[] = [];
-    const seenElementIds = new Set<number>();
-    allPathsRaw.forEach((p: any) => {
-      if (!seenElementIds.has(p.Id)) {
-        seenElementIds.add(p.Id);
-        allPaths.push(p);
-      }
-    });
-    
-    // Filtrage sur les chemins uniques
-    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
-    console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
 
-    // 4. Attribution : Chaque document est affecté à sa DERNIÈRE tâche de traitement (la plus récente)
+    // 4. Attribution Hybride
+    // On commence par DirectionId du document (présent même sans tâche)
     const docToElement: Record<number, number> = {};
-    // On trie par TaskNumber DESC pour prendre la plus récente en premier
+    yearDocs.forEach((d: any) => {
+      if (d.DirectionId) docToElement[d.Id] = d.DirectionId;
+    });
+
+    // On surcharge avec la tâche la plus RECENTE si elle existe (plus précis)
     taskDocs.sort((a: any, b: any) => b.TaskNumber - a.TaskNumber).forEach((t: any) => {
-      if (yearDocIds.has(t.DocumentId)) {
-        if (!docToElement.hasOwnProperty(t.DocumentId)) {
-          docToElement[t.DocumentId] = t.AssignedToStructureElementId;
-        }
+      // On ne l'affecte que si le doc appartient bien à notre set filtré
+      if (docToElement.hasOwnProperty(t.DocumentId)) {
+        docToElement[t.DocumentId] = t.AssignedToStructureElementId;
       }
     });
+
+    const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
 
     const countsByElementId: Record<number, Set<number>> = {};
     Object.entries(docToElement).forEach(([docId, elementId]) => {
