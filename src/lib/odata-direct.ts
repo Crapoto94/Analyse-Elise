@@ -287,17 +287,28 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 
       // 3. Calcul final des comptes uniques par entité
       const map: Record<string, number> = {};
-      const globallySeenDocs = new Set<number>(); // Pour éviter de compter le même doc dans deux entités différentes du même niveau si nécessaire, mais ici on veut surtout l'unicité par NOM d'entité.
       
+      // On veut que la somme des entités soit cohérente avec le total global.
+      // Un document ne doit pas être compté deux fois dans deux entités différentes DU MÊME NIVEAU.
+      const globallySeenInThisLevel = new Set<number>();
+
+      // On traite les entités dans l'ordre (le premier qui "prend" le doc le garde)
       Object.entries(idsByName).forEach(([name, idSet]) => {
-        const uniqueDocsInLevel = new Set<number>();
+        const uniqueDocsInEntity = new Set<number>();
         idSet.forEach(structId => {
           if (countsByElementId[structId]) {
-            countsByElementId[structId].forEach(docId => uniqueDocsInLevel.add(docId));
+            countsByElementId[structId].forEach(docId => {
+              if (!globallySeenInThisLevel.has(docId)) {
+                uniqueDocsInEntity.add(docId);
+              }
+            });
           }
         });
-        if (uniqueDocsInLevel.size > 0) {
-          map[name] = uniqueDocsInLevel.size;
+        
+        if (uniqueDocsInEntity.size > 0) {
+          map[name] = uniqueDocsInEntity.size;
+          // Marquer ces docs comme "vus" pour les autres entités de ce niveau
+          uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
         }
       });
 
