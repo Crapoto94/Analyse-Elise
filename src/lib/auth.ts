@@ -2,9 +2,14 @@ import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { prismaSystem } from './prisma';
 
-const AUTH_SECRET = process.env.AUTH_SECRET || 'elise-secret-key-12345';
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@elise.local';
-const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+function cleanEnv(val: string | undefined): string | undefined {
+  if (!val) return val;
+  return val.trim().replace(/^["']|["']$/g, '');
+}
+
+const AUTH_SECRET = cleanEnv(process.env.AUTH_SECRET) || 'elise-secret-key-12345';
+const ADMIN_EMAIL = cleanEnv(process.env.ADMIN_EMAIL) || 'admin@elise.local';
+const ADMIN_PASSWORD_HASH = cleanEnv(process.env.ADMIN_PASSWORD_HASH);
 
 export function hashPassword(password: string) {
   return crypto.createHash('sha256').update(password).digest('hex');

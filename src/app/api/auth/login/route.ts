@@ -10,6 +10,14 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = hashPassword(password);
+
+    // DEBUG LOGS (Safe: no passwords printed)
+    const isAdminEmail = email === (process.env.ADMIN_EMAIL || 'admin@elise.local').trim().replace(/^["']|["']$/g, '');
+    const expectedHash = process.env.ADMIN_PASSWORD_HASH ? process.env.ADMIN_PASSWORD_HASH.trim().replace(/^["']|["']$/g, '') : hashPassword('admin123');
+    const isHashMatch = hashedPassword === expectedHash;
+
+    console.log(`[LOGIN DEBUG] Email: ${email} | IsAdminEmail: ${isAdminEmail} | IsHashMatch: ${isHashMatch} | EnvHashPresent: ${!!process.env.ADMIN_PASSWORD_HASH}`);
+
     const isValid = await verifyUser(email, hashedPassword);
 
     if (!isValid) {
