@@ -257,7 +257,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         });
       } else {
         // Logique standard pour Pôle, DGA, Direction
-        allPaths.forEach((p: any) => {
+        allPaths.forEach(p => {
           const name = (p[level] || '').trim();
           if (name && idsByName.hasOwnProperty(name)) {
             let matches = true;
@@ -283,7 +283,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
             docSet.forEach((did: number) => uniqueDocsInLevel.add(did));
           }
         });
-        if (uniqueDocsInLevel.size > 0 || !name.startsWith('(')) {
+        if (uniqueDocsInLevel.size > 0) {
           map[name] = uniqueDocsInLevel.size;
         }
       });

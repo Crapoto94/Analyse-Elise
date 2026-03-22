@@ -31,6 +31,22 @@ export async function verifyUser(email: string, passwordHash: string) {
     const defaultHash = hashPassword('admin123');
     if (email === 'admin@elise.local' && passwordHash === defaultHash) return { email, role: 'ADMIN' };
   } else if (email === ADMIN_EMAIL && passwordHash === ADMIN_PASSWORD_HASH) {
+    // Auto-provision in DB if possible
+    try {
+      const existing = await prismaSystem.user.findUnique({ where: { email } });
+      if (!existing) {
+        await prismaSystem.user.create({
+          data: {
+            email,
+            password: passwordHash,
+            role: 'ADMIN'
+          }
+        });
+        console.log(`[AUTH] Admin ${email} auto-provisioned in DB`);
+      }
+    } catch (e) {
+      console.warn('[AUTH] Auto-provisioning failed (read-only or missing table)');
+    }
     return { email, role: 'ADMIN' };
   }
   
