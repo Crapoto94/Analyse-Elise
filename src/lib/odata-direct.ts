@@ -190,7 +190,12 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       name: s.LabelFrFr || s.Label
     }));
     const allPaths = allPathsRaw;
-    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey);
+    // Log pour diagnostiquer les types sur Proxmox
+    const uniqueTypes = [...new Set(allPaths.map((p: any) => p.StructureElementTypeKey))];
+    console.log(`[HIERARCHY DEBUG] Unique types: ${uniqueTypes.join(', ')}`);
+    
+    // Filtrage strict : que les services (évite les USERS qui apparaissent en pôles)
+    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE');
 
     // 4. Attribution : Chaque document est affecté à sa DERNIÈRE tâche de traitement (la plus récente)
     const docToElement: Record<number, number> = {};
