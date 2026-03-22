@@ -616,7 +616,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     });
 
     return {
-      availableYears: [2026, 2025, 2024],
+      availableYears: [2026, 2025, 2024, 2023, 2022, 2021, 2020],
       entrants,
       assignments: Array.from(assignmentsSet.values()),
       averageDelay: closedCount > 0 ? totalDelayDays / closedCount : 0

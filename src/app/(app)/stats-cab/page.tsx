@@ -105,8 +105,8 @@ export default function StatsCabinetPage() {
   const { entrants, assignments, averageDelay } = data;
 
   // Evolution data for chart (Monthly or Daily)
-  const isMonthly = !data?.month || data?.month === 'all';
-  const monthlyData = (entrants?.byMonth || []).map((entry: any, i: number) => {
+  const isMonthly = !month || month === 'all';
+  const monthlyData = (data?.entrants?.byMonth || []).map((entry: any, i: number) => {
     const total = (entry.courriers || 0) + (entry.courriels || 0);
     if (isMonthly) {
       return {
@@ -116,8 +116,10 @@ export default function StatsCabinetPage() {
         courriels: entry.courriels
       };
     } else {
+      // Vue Mensuelle : On affiche le jour avec le mois (ex: 12/03)
+      const daySuffix = month.padStart(2, '0');
       return {
-        name: (i + 1).toString().padStart(2, '0'),
+        name: `${(i + 1).toString().padStart(2, '0')}/${daySuffix}`,
         count: total,
         courriers: entry.courriers,
         courriels: entry.courriels
