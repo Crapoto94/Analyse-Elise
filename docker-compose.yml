@@ -18,6 +18,8 @@ services:
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
       - PORT=5002
+    command: >
+      sh -c "npx prisma db push --accept-data-loss && node server.js"
     volumes:
       - ./prisma:/app/prisma
     healthcheck:

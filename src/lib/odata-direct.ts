@@ -414,7 +414,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     const pathMap = new Map();
     allPathsRaw.forEach((p: any) => {
       pathMap.set(p.Id, {
-        isMuni: p.Level2?.startsWith('CABINET DU MAIRE'),
+        isMuni: p.Level2?.toUpperCase().includes('CABINET'),
         pole: p.Level2?.trim(),
         dga: p.Level3?.trim(),
         dir: p.Level4?.trim(),
@@ -428,11 +428,18 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
 
     // 2. Classification et Affectations
     const docToTasks = new Map<number, any[]>();
+    const uniqueLevel2 = new Set<string>();
+    
     taskDocs.forEach(t => {
+      const p = pathMap.get(t.AssignedToStructureElementId);
+      if (p?.pole) uniqueLevel2.add(p.pole);
+      
       // Historique complet pour de multiples affectations
       if (!docToTasks.has(t.DocumentId)) docToTasks.set(t.DocumentId, []);
       docToTasks.get(t.DocumentId)?.push(t);
     });
+
+    console.log(`[DEBUG CABINET] Unique Level2 found in Tasks:`, Array.from(uniqueLevel2));
 
     let docs = docsRaw;
     // Pré-filtrage global des documents (état et hiérarchie)
@@ -482,7 +489,10 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       sharedCount: 0,
       byMonth: Array(chartSize).fill(0).map(() => ({ courriers: 0, courriels: 0 })),
       byNature: {} as Record<string, number>,
-      deadlines: { within30: 0, within60: 0, exceeded: 0 }
+      deadlines: { 
+        closed: { within30: 0, within60: 0, exceeded: 0 },
+        active: { within30: 0, within60: 0, exceeded: 0 }
+      }
     };
 
     const assignmentsSet = new Map<string, any>();
@@ -589,18 +599,18 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
         if (diff >= 0) {
           totalDelayDays += diff;
           closedCount++;
-          if (diff <= 30) entrants.deadlines.within30++;
-          else if (diff <= 60) entrants.deadlines.within60++;
-          else entrants.deadlines.exceeded++;
+          if (diff <= 30) entrants.deadlines.closed.within30++;
+          else if (diff <= 60) entrants.deadlines.closed.within60++;
+          else entrants.deadlines.closed.exceeded++;
         }
       } else if (doc.StateId !== 45 && doc.StateId !== 46) {
         // En Cours
         const today = new Date();
         const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
         if (diff >= 0) {
-          if (diff <= 30) entrants.deadlines.within30++;
-          else if (diff <= 60) entrants.deadlines.within60++;
-          else entrants.deadlines.exceeded++;
+          if (diff <= 30) entrants.deadlines.active.within30++;
+          else if (diff <= 60) entrants.deadlines.active.within60++;
+          else entrants.deadlines.active.exceeded++;
         }
       }
     });

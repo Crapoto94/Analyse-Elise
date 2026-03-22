@@ -293,32 +293,92 @@ export default function StatsCabinetPage() {
       </div>
 
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Monthly Evolution */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-          <h2 className="text-lg font-bold mb-8 text-gray-800 dark:text-white flex items-center gap-2">
-            <span className="w-1 h-5 bg-blue-600 rounded-full"></span> Évolution Flux Mensuel
-          </h2>
-          <div className="h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyData}>
-                <defs>
-                  <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                />
-                <Area type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCount)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {/* SLA Section - DUAL separated Closed vs Active */}
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+          <span className="w-1 h-5 bg-red-500 rounded-full"></span> Respect des Délais (SLA 30j / DRH 60j)
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Closed docs */}
+          {(() => {
+            const c = entrants?.deadlines?.closed || { within30: 0, within60: 0, exceeded: 0 };
+            const successC = (c.within30 || 0) + (c.within60 || 0);
+            const totalC = successC + (c.exceeded || 0);
+            const ratioC = totalC > 0 ? Math.round((successC / totalC) * 100) : 0;
+            return (
+              <div className="p-6 rounded-2xl bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 space-y-4">
+                <p className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Dossiers Clôturés</p>
+                <div className="flex gap-4">
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                    <span className="text-green-600 font-black text-xl">✓</span>
+                    <div>
+                      <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest">Dans les temps</p>
+                      <p className="text-2xl font-black text-green-700 dark:text-green-300">{successC}</p>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl">
+                    <span className="text-red-600 font-black text-xl">!</span>
+                    <div>
+                      <p className="text-[9px] font-bold text-red-600 uppercase tracking-widest">Dépassé</p>
+                      <p className="text-2xl font-black text-red-700 dark:text-red-300">{c.exceeded || 0}</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Taux de succès</span>
+                    <span className="text-xs font-black text-gray-900 dark:text-white">{ratioC}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 h-2 rounded-full overflow-hidden">
+                    <div className="bg-green-500 h-full transition-all duration-1000" style={{ width: `${ratioC}%` }}></div>
+                  </div>
+                  <p className="text-[8px] text-gray-400 mt-1 text-right">Sur {totalC} dossiers clôturés</p>
+                </div>
+              </div>
+            );
+          })()}
+          {/* Active docs */}
+          {(() => {
+            const a = entrants?.deadlines?.active || { within30: 0, within60: 0, exceeded: 0 };
+            const successA = (a.within30 || 0) + (a.within60 || 0);
+            const totalA = successA + (a.exceeded || 0);
+            const ratioA = totalA > 0 ? Math.round((successA / totalA) * 100) : 0;
+            return (
+              <div className="p-6 rounded-2xl bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 space-y-4">
+                <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Dossiers En Cours ⏳</p>
+                <div className="flex gap-4">
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                    <span className="text-green-600 font-black text-xl">✓</span>
+                    <div>
+                      <p className="text-[9px] font-bold text-green-600 uppercase tracking-widest">Dans les temps</p>
+                      <p className="text-2xl font-black text-green-700 dark:text-green-300">{successA}</p>
+                    </div>
+                  </div>
+                  <div className="flex-1 flex items-center gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
+                    <span className="text-orange-600 font-black text-xl">⚠</span>
+                    <div>
+                      <p className="text-[9px] font-bold text-orange-600 uppercase tracking-widest">Dépassé</p>
+                      <p className="text-2xl font-black text-orange-700 dark:text-orange-300">{a.exceeded || 0}</p>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Dans les temps</span>
+                    <span className="text-xs font-black text-gray-900 dark:text-white">{ratioA}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 h-2 rounded-full overflow-hidden">
+                    <div className="bg-amber-400 h-full transition-all duration-1000" style={{ width: `${ratioA}%` }}></div>
+                  </div>
+                  <p className="text-[8px] text-gray-400 mt-1 text-right">Sur {totalA} dossiers en cours</p>
+                </div>
+              </div>
+            );
+          })()}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* Nature Distribution */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
@@ -396,53 +456,8 @@ export default function StatsCabinetPage() {
         </div>
       </div>
 
-      {/* SLA Deadlines Section */}
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-8 flex items-center gap-2">
-          <span className="w-1 h-5 bg-red-500 rounded-full"></span> Respect des Délais (SLA 30j / DRH 60j)
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="flex items-center gap-4 p-5 rounded-2xl bg-green-50/50 dark:bg-green-900/10 border border-green-100 dark:border-green-900/30">
-            <div className="p-3 bg-green-100 dark:bg-green-800/50 rounded-xl text-green-600 dark:text-green-400 font-black text-xl shadow-sm">✓</div>
-            <div>
-              <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-widest mb-1">Dans les temps</p>
-              <p className="text-2xl font-black text-green-700 dark:text-green-300">
-                {(entrants?.deadlines?.within30 || 0) + (entrants?.deadlines?.within60 || 0)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 p-5 rounded-2xl bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30">
-            <div className="p-3 bg-red-100 dark:bg-red-800/50 rounded-xl text-red-600 dark:text-red-400 font-black text-xl shadow-sm">!</div>
-            <div>
-              <p className="text-[10px] font-bold text-red-600 dark:text-red-400 uppercase tracking-widest mb-1">Dépassé</p>
-              <p className="text-2xl font-black text-red-700 dark:text-green-300">{entrants?.deadlines?.exceeded || 0}</p>
-            </div>
-          </div>
-          {(() => {
-             const success = (entrants?.deadlines?.within30 || 0) + (entrants?.deadlines?.within60 || 0);
-             const failed = (entrants?.deadlines?.exceeded || 0);
-             const totalEvalues = success + failed;
-             const ratio = totalEvalues > 0 ? Math.round((success / totalEvalues) * 100) : 0;
-             return (
-               <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 flex flex-col justify-center">
-                  <div className="flex justify-between mb-2">
-                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Taux de succès</span>
-                     <span className="text-sm font-black text-gray-900 dark:text-white">
-                        {ratio}%
-                     </span>
-                  </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-600 h-2.5 rounded-full overflow-hidden">
-                     <div 
-                       className="bg-green-500 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
-                       style={{ width: `${ratio}%` }}
-                     ></div>
-                  </div>
-                  <p className="text-[8px] text-gray-400 mt-2 text-right uppercase tracking-wider">Sur {totalEvalues} dossiers (clôturés et en cours)</p>
-               </div>
-             );
-          })()}
-        </div>
-      </div>
+
+
     </div>
   );
 }
