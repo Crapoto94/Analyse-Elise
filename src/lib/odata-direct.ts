@@ -85,38 +85,35 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         }
       });
 
-      // Attribution STRICTE Tâches: La tâche avec le plus grand TaskNumber prime (Affectation Actuelle)
-      const docToAssignment = new Map<number, { path: any; taskNum: number }>();
+      // Attribution Multi-Path
+      const docToPaths = new Map<number, any[]>();
       
       taskDocs.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
         if (path) {
-          const tN = t.TaskNumber || 0;
-          const current = docToAssignment.get(t.DocumentId);
-          if (!current || tN > current.taskNum) {
-            docToAssignment.set(t.DocumentId, { path, taskNum: tN });
-          }
+           if (!docToPaths.has(t.DocumentId)) docToPaths.set(t.DocumentId, []);
+           docToPaths.get(t.DocumentId)!.push(path);
         }
       });
 
       const initialCount = docs.length;
       docs = docs.filter((d: any) => {
-        const assign = docToAssignment.get(d.Id);
-        if (!assign) return false; 
-        const path = assign.path;
+        const paths = docToPaths.get(d.Id);
+        if (!paths || paths.length === 0) return false; 
         
-        if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
-        if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
-        if (filters.dir !== 'all' && path.dir !== filters.dir) return false;
-        if (filters.service !== 'all') {
-          // '(Affectations directes)' = éléments n'ayant pas de service (Level5 vide)
-          if (filters.service === '(Affectations directes)') {
-            if (path.service) return false;
-          } else {
-            if (path.service !== filters.service) return false;
+        return paths.some(path => {
+          if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
+          if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
+          if (filters.dir !== 'all' && path.dir !== filters.dir) return false;
+          if (filters.service !== 'all') {
+            if (filters.service === '(Affectations directes)') {
+              if (path.service) return false;
+            } else {
+              if (path.service !== filters.service) return false;
+            }
           }
-        }
-        return true;
+          return true;
+        });
       });
       console.log(`[DEBUG STATS] Strict Task Filter: ${initialCount} -> ${docs.length}`);
     }
@@ -400,11 +397,10 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     const taskTypesRaw = await client.requestAll<any>("DimTaskProcessingType?$select=Id,LabelFrFr");
     require('fs').writeFileSync('c:/dev/Stat_Elise_New/tasktypes.json', JSON.stringify(taskTypesRaw, null, 2));
 
-    // 1. Chargement Parallèle (Docs + Tâches + Dimensions)
     const [docsRaw, taskDocs, allPathsRaw, allTypesRaw] = await Promise.all([
       client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId`),
       client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber`),
-      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5"),
+      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey"),
       (cachedTypes && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedTypes) : client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr")
     ]);
 
@@ -422,7 +418,8 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
         pole: p.Level2?.trim(),
         dga: p.Level3?.trim(),
         dir: p.Level4?.trim(),
-        service: p.Level5?.trim()
+        service: p.Level5?.trim(),
+        typeKey: p.StructureElementTypeKey?.toUpperCase() || ''
       });
     });
 
@@ -520,14 +517,12 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
         if (p && !p.isMuni) isCourant = true;
       });
 
-      const seenAssignmentsForThisDoc = new Set<string>();
+      const dirToServices = new Map<string, Map<string, any>>(); // dirName -> Map<serviceName, pathObj>
+      let dirToDirectPath = new Map<string, any>(); // dirName -> pathObj
 
       tasks.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
         if (path) {
-          if (path.isMuni) isMuni = true;
-          else isCourant = true;
-          
           let addIt = true;
           if (filters) {
             if (filters.pole !== 'all' && path.pole !== filters.pole) addIt = false;
@@ -540,16 +535,48 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
           }
           
           if (addIt) {
-            const key = `${path.dir}|${path.service}`;
-            if (!seenAssignmentsForThisDoc.has(key)) {
-              seenAssignmentsForThisDoc.add(key);
-              if (!assignmentsSet.has(key)) {
-                assignmentsSet.set(key, { direction: path.dir, dga: path.dga, service: path.service, count: 0 });
+              const dirName = path.dir || '(Indéterminé)';
+              let serviceName = null;
+              
+              if (!path.service) {
+                 dirToDirectPath.set(dirName, path);
+              } 
+              else if (path.typeKey === 'USER' || (path.typeKey !== 'SERVICE' && path.service)) {
+                 const userName = path.service;
+                 serviceName = (userName === dirName) ? `${userName} (Individuel)` : userName;
               }
-              assignmentsSet.get(key).count++;
-            }
+              else if (path.service && (path.typeKey === 'SERVICE' || path.typeKey === '')) {
+                 serviceName = path.service;
+              }
+
+              if (serviceName) {
+                 if (!dirToServices.has(dirName)) dirToServices.set(dirName, new Map());
+                 dirToServices.get(dirName)?.set(serviceName, path);
+              }
           }
         }
+      });
+
+      // Appliquer l'Anti-Redondance Verticale ET ajouter à assignmentsSet
+      Array.from(dirToServices.entries()).forEach(([dirName, servicesMap]) => {
+         Array.from(servicesMap.entries()).forEach(([svc, pathObj]) => {
+             const key = `${dirName}|${svc}`;
+             if (!assignmentsSet.has(key)) {
+                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: svc, count: 0 });
+             }
+             assignmentsSet.get(key).count++;
+         });
+      });
+
+      Array.from(dirToDirectPath.entries()).forEach(([dirName, pathObj]) => {
+         const services = dirToServices.get(dirName);
+         if (!services || services.size === 0) {
+             const key = `${dirName}|(Affectations directes)`;
+             if (!assignmentsSet.has(key)) {
+                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: '(Affectations directes)', count: 0 });
+             }
+             assignmentsSet.get(key).count++;
+         }
       });
 
       if (isMuni && isCourant) entrants.sharedCount++;
