@@ -45,15 +45,15 @@ export async function createSession(user: { email: string, role: string }) {
   const sessionToken = Buffer.from(JSON.stringify({ data: sessionData, sig: signature })).toString('base64');
 
   const isSecure = process.env.SESSION_SECURE !== undefined 
-    ? process.env.SESSION_SECURE === 'true'
+    ? cleanEnv(process.env.SESSION_SECURE) === 'true'
     : process.env.NODE_ENV === 'production';
 
   const cookieStore = await cookies();
   cookieStore.set('elise_session', sessionToken, {
     expires,
     httpOnly: true,
-    secure: isSecure, // Garde la valeur calculée mais on s'assure qu'elle est false en HTTP
-    sameSite: isSecure ? 'none' : 'lax', // Lax est plus compatible pour HTTP sans SSL
+    secure: isSecure,
+    sameSite: sameSite,
     path: '/',
   });
 }
