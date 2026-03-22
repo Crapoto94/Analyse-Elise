@@ -151,6 +151,19 @@ export class ODataClient {
     }
   }
 
+  public async requestAll<T>(path: string, options: RequestInit = {}): Promise<T[]> {
+    let results: T[] = [];
+    let currentPath: string | null = path;
+
+    while (currentPath) {
+      const resp: ODataResponse<T> = await this.request<ODataResponse<T>>(currentPath, options);
+      results = results.concat(resp.value || []);
+      currentPath = resp['@odata.nextLink'] || null;
+    }
+
+    return results;
+  }
+
   async getCollections(): Promise<ODataResponse<{ name: string; kind: string; url: string }>> {
     return this.request('');
   }

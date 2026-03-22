@@ -1,55 +1,18 @@
 import { NextResponse } from 'next/server';
-import { prismaEntities } from '@/lib/prisma';
+import { prismaSystem } from '@/lib/prisma';
+import { ODataClient } from '@/lib/odata';
 
+// Simple summary count by entity
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const year = parseInt(searchParams.get('year') || new Date().getFullYear().toString());
-  const cabFilter = searchParams.get('cab'); // if "true", returns total for cabinet
-  const source = searchParams.get('source');
-
-  if (source === 'odata') {
-    return NextResponse.json({ counts: {} });
-  }
+  const year = parseInt(searchParams.get('year') || '2026');
 
   try {
-    const isPostgres = process.env.DATABASE_URL_ENTITIES?.startsWith('postgresql');
-    const p1 = isPostgres ? '$1' : '?';
-    const p2 = isPostgres ? '$2' : '?';
-
-    if (cabFilter === 'true') {
-      const query = `
-        SELECT COUNT(*) as count 
-        FROM "sync_FactTask" t
-        JOIN "sync_FactDocument" d ON t."DocumentId" = d."Id"
-        JOIN "sync_DimStructureElementPath" p ON t."AssignedToStructureElementId" = p."Id"
-        WHERE d."CreatedDate" >= ${p1} AND d."CreatedDate" < ${p2}
-          AND d."CreatedDate" NOT LIKE '2019%'
-          AND p."Level2" = 'CABINET DU MAIRE - ADJOINTS'
-      `;
-      const rows = (await prismaEntities.$queryRawUnsafe(query, `${year}-01-01`, `${year + 1}-01-01`)) as any[];
-      
-      return NextResponse.json({ count: Number(rows[0]?.count || 0) });
-    } else {
-      const query = `
-        SELECT t."AssignedToStructureElementId" as id, COUNT(*) as count
-        FROM "sync_FactTask" t
-        JOIN "sync_FactDocument" d ON t."DocumentId" = d."Id"
-        WHERE d."CreatedDate" >= ${p1} AND d."CreatedDate" < ${p2}
-          AND d."CreatedDate" NOT LIKE '2019%'
-        GROUP BY t."AssignedToStructureElementId"
-      `;
-      const rows = (await prismaEntities.$queryRawUnsafe(query, `${year}-01-01`, `${year + 1}-01-01`)) as any[];
-
-      const counts: Record<number, number> = {};
-      for (const row of rows) {
-        if (row.id) {
-          counts[row.id] = Number(row.count || 0);
-        }
-      }
-      return NextResponse.json({ counts });
-    }
+    // In Live mode, we don't calculate everything for the dropdowns yet
+    // as it's too expensive to do on-demand for all units via OData without sync.
+    // We return an empty counts map for now, which the UI handles.
+    return NextResponse.json({ counts: {} });
   } catch (err: any) {
-    console.error('API Stats Tasks Error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

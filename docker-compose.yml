@@ -1,22 +1,4 @@
-networks:
-  default:
-    name: odata-network
-
 services:
-  db:
-    image: postgres:16
-    container_name: odata-postgres
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_MULTIPLE_DATABASES=app_entities
-    volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
-    ports:
-      - "5432:5432"
-
   app:
     build:
       context: .
@@ -25,17 +7,19 @@ services:
     restart: always
     ports:
       - "5002:5002"
-    depends_on:
-      - db
-    volumes:
-      - odata-system-data:/app/data
     environment:
-      - DATABASE_URL_SYSTEM=file:/app/data/system.db
-      - DATABASE_URL_ENTITIES=postgresql://postgres:postgres@db:5432/app_entities?schema=public
+      - DATABASE_URL_SYSTEM=file:/app/prisma/system.db
+      - ODATA_BASE_URL=https://ville-ivry94.illico.city/AppBI/odata/
+      - ODATA_USERNAME=User_StatBI
+      - ODATA_PASSWORD=2V.}dyRB,8P9h6]8=Fte
+      - ADMIN_EMAIL=admin@elise.local
+      - ADMIN_PASSWORD_HASH=8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918
       - SESSION_SECURE=false
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
       - PORT=5002
+    volumes:
+      - ./prisma:/app/prisma
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5002/api/health"]
       interval: 30s
@@ -43,6 +27,6 @@ services:
       retries: 3
       start_period: 40s
 
-volumes:
-  odata-system-data:
-  postgres_data:
+networks:
+  default:
+    name: odata-network

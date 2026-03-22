@@ -55,9 +55,19 @@ export default function SettingsPage() {
 
       <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-2xl shadow-gray-200/50 dark:shadow-none min-h-[600px] overflow-hidden">
         {activeTab === 'sql' && <RestoredSqlExplorer />}
-        {activeTab === 'logs' && <SyncLogsTab />}
+        {activeTab === 'logs' && <div className="p-20 text-center space-y-4">
+          <div className="text-4xl">📜</div>
+          <h2 className="text-xl font-black uppercase tracking-tight">Logs de Synchronisation</h2>
+          <p className="text-gray-500 max-w-md mx-auto">L&apos;historique complet des synchronisations et des logs système est désormais disponible sur la page dédiée.</p>
+          <button onClick={() => router.push('/connect')} className="px-8 py-3 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-blue-500/20">Aller aux Logs</button>
+        </div>}
         {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'config' && <ConfigTab />}
+        {activeTab === 'config' && <div className="p-20 text-center space-y-4">
+          <div className="text-4xl">☁️</div>
+          <h2 className="text-xl font-black uppercase tracking-tight">Configuration OData</h2>
+          <p className="text-gray-500 max-w-md mx-auto">La configuration de la connexion Elise est centralisée sur la page de connexion sécurisée.</p>
+          <button onClick={() => router.push('/connect')} className="px-8 py-3 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-blue-500/20">Gérer la Connexion</button>
+        </div>}
       </div>
     </div>
   );
@@ -186,7 +196,7 @@ function RestoredSqlExplorer() {
 function SyncLogsTab() {
   const [logs, setLogs] = useState<any[]>([]);
   useEffect(() => {
-    fetch('/api/auth/sync-logs').then(res => res.json()).then(setLogs);
+    fetch('/api/sync-logs').then(res => res.json()).then(setLogs);
   }, []);
 
   const [optimizing, setOptimizing] = useState(false);
@@ -438,38 +448,5 @@ function UsersTab() {
 // 4. CONFIG TAB
 // --------------------------------------------------------------------------------
 function ConfigTab() {
-  const [config, setConfig] = useState<any>({});
-  useEffect(() => { fetch('/api/config').then(res => res.json()).then(setConfig); }, []);
-
-  const handleSave = async (e: any) => {
-    e.preventDefault();
-    await fetch('/api/config', { method: 'POST', body: JSON.stringify(config) });
-    alert('Configuration enregistrée');
-  };
-
-  return (
-    <div className="p-10 space-y-10 max-w-2xl">
-      <div className="space-y-2">
-        <h2 className="text-2xl font-black uppercase tracking-tight italic">Connexion OData</h2>
-        <p className="text-gray-400 text-xs font-bold tracking-widest uppercase">Paramètres de liaison Elise</p>
-      </div>
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="space-y-6">
-           <div>
-             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 px-1">URL API OData</label>
-             <input value={config.ODATA_URL || ''} onChange={e => setConfig({...config, ODATA_URL: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 px-5 py-4 rounded-2xl text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
-           </div>
-           <div>
-             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 px-1">Identifiant Service (Gateway)</label>
-             <input value={config.ODATA_USER || ''} onChange={e => setConfig({...config, ODATA_USER: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 px-5 py-4 rounded-2xl text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
-           </div>
-           <div>
-             <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 px-1">Mot de passe / Secret</label>
-             <input type="password" value={config.ODATA_PASS || ''} onChange={e => setConfig({...config, ODATA_PASS: e.target.value})} className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 px-5 py-4 rounded-2xl text-sm font-bold text-gray-800 dark:text-gray-200 outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••" />
-           </div>
-        </div>
-        <button className="bg-gray-900 text-white dark:bg-white dark:text-black px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 shadow-gray-200 dark:shadow-none">Enregistrer la configuration</button>
-      </form>
-    </div>
-  );
+  return null; // Logic moved to main UI call-to-action
 }

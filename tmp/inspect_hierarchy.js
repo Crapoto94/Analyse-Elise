@@ -1,14 +1,20 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+'use client';
+const { ODataClient } = require('./src/lib/odata');
+const dotenv = require('dotenv');
+dotenv.config();
 
-async function main() {
-  const res = await prisma.$queryRawUnsafe(`
-    SELECT DISTINCT Level1, Level2, Level3, Level4, Level5 
-    FROM sync_DimStructureElementPath 
-    WHERE Path LIKE '1|269%'
-    LIMIT 100
-  `);
-  console.log(JSON.stringify(res, null, 2));
+async function test() {
+  const config = {
+    baseUrl: process.env.ODATA_BASE_URL,
+    username: process.env.ODATA_USERNAME,
+    password: process.env.ODATA_PASSWORD
+  };
+  const client = new ODataClient(config);
+  try {
+    const data = await client.request('DimStructureElementPath?$top=5');
+    console.log('Sample Path:', JSON.stringify(data.value, null, 2));
+  } catch (e) {
+    console.error(e);
+  }
 }
-
-main().catch(console.error).finally(() => prisma.$disconnect());
+test();

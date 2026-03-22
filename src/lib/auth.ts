@@ -1,17 +1,37 @@
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import { prismaSystem } from './prisma';
 
 const AUTH_SECRET = process.env.AUTH_SECRET || 'elise-secret-key-12345';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@elise.local';
+const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
 
 export function hashPassword(password: string) {
   return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+export async function verifyUser(email: string, passwordHash: string) {
+  // Check in DB
+  const user = await prismaSystem.user.findUnique({
+    where: { email }
+  });
+  if (user && user.password === passwordHash) return user;
+
+  // Fallback to Env-based Admin
+  if (!ADMIN_PASSWORD_HASH) {
+    const defaultHash = hashPassword('admin123');
+    if (email === 'admin@elise.local' && passwordHash === defaultHash) return { email, role: 'ADMIN' };
+  } else if (email === ADMIN_EMAIL && passwordHash === ADMIN_PASSWORD_HASH) {
+    return { email, role: 'ADMIN' };
+  }
+  
+  return null;
 }
 
 export async function createSession(user: { email: string, role: string }) {
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   const sessionData = JSON.stringify({ ...user, expires });
   
-  // Simple signature for the session to prevent tampering
   const signature = crypto.createHmac('sha256', AUTH_SECRET).update(sessionData).digest('hex');
   const sessionToken = Buffer.from(JSON.stringify({ data: sessionData, sig: signature })).toString('base64');
 

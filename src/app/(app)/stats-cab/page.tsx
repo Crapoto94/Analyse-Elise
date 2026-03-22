@@ -48,60 +48,51 @@ export default function StatsCabinetPage() {
   const [dgas, setDgas] = useState<{name: string, count: number}[]>([]);
   const [directions, setDirections] = useState<{name: string, count: number}[]>([]);
   const [services, setServices] = useState<{name: string, count: number}[]>([]);
-  const [dataSource, setDataSource] = useState<'local' | 'odata'>('local');
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        year: String(year),
+        type,
+        month,
+        status,
+        pole: poleFilter,
+        dga: dgaFilter,
+        dir: dirFilter,
+        service: serviceFilter
+      });
+      const res = await fetch(`/api/stats/cabinet-v2?${params}`);
+      const json = await res.json();
+      setData(json);
+      if (json.availableYears) setAvailableYears(json.availableYears);
+
+      // Update hierarchy options when filters change
+      const hParams = new URLSearchParams({
+         year: String(year),
+         month: month,
+         status: status,
+         pole: poleFilter,
+         dga: dgaFilter,
+         dir: dirFilter
+      });
+      const hRes = await fetch(`/api/hierarchy?${hParams}`);
+      const hJson = await hRes.json();
+      
+      if (hJson.statuses) setAvailableStatuses(hJson.statuses);
+      setPoles(hJson.poles || []);
+      setDgas(hJson.dgas || []);
+      setDirections(hJson.directions || []);
+      setServices(hJson.services || []);
+      
+    } catch (error) {
+      console.error('Error fetching cabinet stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const updateSource = () => {
-      const saved = localStorage.getItem('data_source') as 'local' | 'odata';
-      if (saved) setDataSource(saved);
-    };
-    updateSource();
-    window.addEventListener('dataSourceChanged', updateSource);
-    return () => window.removeEventListener('dataSourceChanged', updateSource);
-  }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams({
-          year: String(year),
-          type,
-          month,
-          status,
-          pole: poleFilter,
-          dga: dgaFilter,
-          dir: dirFilter,
-          service: serviceFilter,
-          source: dataSource
-        });
-        const res = await fetch(`/api/stats/cabinet-v2?${params}`);
-        const json = await res.json();
-        setData(json);
-        if (json.availableYears) setAvailableYears(json.availableYears);
-
-        // Update hierarchy options when filters change
-        const hParams = new URLSearchParams({
-           year: String(year),
-           pole: poleFilter,
-           dga: dgaFilter,
-           dir: dirFilter
-        });
-        const hRes = await fetch(`/api/hierarchy?${hParams}`);
-        const hJson = await hRes.json();
-        
-        if (hJson.statuses) setAvailableStatuses(hJson.statuses);
-        setPoles(hJson.poles || []);
-        setDgas(hJson.dgas || []);
-        setDirections(hJson.directions || []);
-        setServices(hJson.services || []);
-        
-      } catch (error) {
-        console.error('Error fetching cabinet stats:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [year, type, month, status, poleFilter, dgaFilter, dirFilter, serviceFilter]);
 
@@ -115,19 +106,43 @@ export default function StatsCabinetPage() {
 
   const { entrants, assignments, averageDelay } = data;
 
-  // Monthly data for chart
-  const monthlyData = (entrants?.byMonth || []).map((count: number, i: number) => ({
-    name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(2000, i)),
-    count
-  }));
+  // Evolution data for chart (Monthly or Daily)
+  const isMonthly = !data?.month || data?.month === 'all';
+  const monthlyData = (entrants?.byMonth || []).map((entry: any, i: number) => {
+    const total = (entry.courriers || 0) + (entry.courriels || 0);
+    if (isMonthly) {
+      return {
+        name: new Intl.DateTimeFormat('fr-FR', { month: 'short' }).format(new Date(2000, i)),
+        count: total,
+        courriers: entry.courriers,
+        courriels: entry.courriels
+      };
+    } else {
+      return {
+        name: (i + 1).toString().padStart(2, '0'),
+        count: total,
+        courriers: entry.courriers,
+        courriels: entry.courriels
+      };
+    }
+  });
 
   // Nature data for chart
   const natureData = Object.entries(entrants?.byNature || {}).map(([name, value]) => ({ name, value: value as number }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 8);
 
+  // Filter assignments based on classification toggle
+  const filteredAssignments = (assignments || []).filter((a: any) => {
+    if (type === 'all') return true;
+    const isMuni = a.direction?.startsWith('CABINET DU MAIRE');
+    if (type === 'muni') return isMuni;
+    if (type === 'courant') return !isMuni;
+    return true;
+  });
+
   // Group assignments by Direction
-  const groupedAssignments = (assignments || []).reduce((acc: any, curr: any) => {
+  const groupedAssignments = filteredAssignments.reduce((acc: any, curr: any) => {
     const dirKey = curr.direction || 'Pôle DGS (Transverse)';
     if (!acc[dirKey]) {
       acc[dirKey] = {
@@ -155,11 +170,7 @@ export default function StatsCabinetPage() {
             <div>
               <div className="flex items-center gap-2 mt-1">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight text-nowrap">Tableau de Bord Cabinet</h1>
-                {dataSource === 'odata' ? (
-                  <span className="text-[9px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">LIVE ODATA 🚀</span>
-                ) : (
-                  <span className="text-[9px] bg-emerald-100 text-emerald-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest">LOCAL DB ⚡</span>
-                )}
+                <span className="text-[9px] bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">LIVE ODATA 🚀</span>
               </div>
               <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest">{year} • Filtres Actifs</p>
             </div>
@@ -287,19 +298,10 @@ export default function StatsCabinetPage() {
              </div>
           </div>
         </div>
-        <div className="h-[300px] w-full">
+        <div className="w-full" style={{ height: '350px' }}>
            <ResponsiveContainer width="100%" height="100%">
-             <AreaChart data={data?.bySupportEvolution || []}>
-               <defs>
-                 <linearGradient id="colorPapier" x1="0" y1="0" x2="0" y2="1">
-                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                 </linearGradient>
-                 <linearGradient id="colorMail" x1="0" y1="0" x2="0" y2="1">
-                   <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                   <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                 </linearGradient>
-               </defs>
+             <BarChart data={monthlyData}>
+               <Legend verticalAlign="top" align="right" iconType="circle" />
                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                <XAxis 
                  dataKey="name" 
@@ -316,9 +318,9 @@ export default function StatsCabinetPage() {
                <Tooltip 
                  contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900, fontSize: '12px' }}
                />
-               <Area type="monotone" dataKey="papier" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorPapier)" />
-               <Area type="monotone" dataKey="mail" stroke="#4f46e5" strokeWidth={4} fillOpacity={1} fill="url(#colorMail)" />
-             </AreaChart>
+               <Bar dataKey="courriers" name="Papier" stackId="a" fill="#3b82f6" />
+               <Bar dataKey="courriels" name="E-mail" stackId="a" fill="#f59e0b" radius={[10, 10, 0, 0]} />
+             </BarChart>
            </ResponsiveContainer>
         </div>
       </div>

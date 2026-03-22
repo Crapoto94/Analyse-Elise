@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
 export default function StatistiquesPage() {
@@ -30,28 +30,16 @@ export default function StatistiquesPage() {
   
   const [loading, setLoading] = useState(true);
   const [docCountsById, setDocCountsById] = useState<Record<number, number>>({});
-  const [dataSource, setDataSource] = useState<'local' | 'odata'>('local');
-
-  // Load data source choice
-  useEffect(() => {
-    const updateSource = () => {
-      const saved = localStorage.getItem('data_source') as 'local' | 'odata';
-      if (saved) setDataSource(saved);
-    };
-    updateSource();
-    window.addEventListener('dataSourceChanged', updateSource);
-    return () => window.removeEventListener('dataSourceChanged', updateSource);
-  }, []);
 
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: currentYear - 2018 + 1 }, (_, i) => 2018 + i).filter(y => y !== 2019);
+  const years = Array.from({ length: currentYear - 2020 + 1 }, (_, i) => 2020 + i);
 
   // 1. Initial Load: Fetch Hierarchy and Mail Counts
   useEffect(() => {
     const init = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/hierarchy?year=${yearFilter}`);
+        const res = await fetch(`/api/hierarchy?year=${yearFilter}&month=${monthFilter}&status=${statusFilter}`);
         const json = await res.json();
         setPoles(json.poles || []);
 
@@ -64,17 +52,17 @@ export default function StatistiquesPage() {
       }
     };
     init();
-  }, [yearFilter, dataSource]); // Re-init on dataSource change
+  }, [yearFilter]);
 
   // Handle cascading filters
   useEffect(() => {
     updateHierarchyOptions();
     fetchData();
-  }, [poleFilter, dgaFilter, dirFilter, serviceFilter, monthFilter, statusFilter, dataSource]);
+  }, [poleFilter, dgaFilter, dirFilter, serviceFilter, monthFilter, statusFilter]);
 
   const fetchMailCounts = async (year: number) => {
     try {
-      const params = new URLSearchParams({ year: year.toString(), source: dataSource });
+      const params = new URLSearchParams({ year: year.toString() });
       const res = await fetch(`/api/stats-tasks?${params}`);
       const json = await res.json();
       if (json.counts) {
@@ -87,7 +75,11 @@ export default function StatistiquesPage() {
 
   const updateHierarchyOptions = async () => {
     try {
-      const params = new URLSearchParams({ year: yearFilter.toString() });
+      const params = new URLSearchParams({ 
+        year: yearFilter.toString(),
+        month: monthFilter,
+        status: statusFilter
+      });
       if (poleFilter !== 'all') params.set('pole', poleFilter);
       if (dgaFilter !== 'all') params.set('dga', dgaFilter);
       if (dirFilter !== 'all') params.set('dir', dirFilter);
@@ -115,8 +107,7 @@ export default function StatistiquesPage() {
         dir: dirFilter,
         service: serviceFilter,
         month: monthFilter,
-        status: statusFilter,
-        source: dataSource
+        status: statusFilter
       });
       
       const res = await fetch(`/api/stats?${params}`);
@@ -142,11 +133,7 @@ export default function StatistiquesPage() {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             Stats généraux
-            {dataSource === 'odata' ? (
-              <span className="text-xs bg-amber-100 text-amber-600 px-2 py-1 rounded-full uppercase tracking-tighter animate-pulse">LIVE 🚀</span>
-            ) : (
-              <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-full uppercase tracking-tighter">LOCAL ⚡</span>
-            )}
+            <span className="text-xs bg-amber-100 text-amber-600 px-2 py-1 rounded-full uppercase tracking-tighter animate-pulse">LIVE 🚀</span>
           </h1>
           <p className="text-slate-500">Exploration globale des courriers par structure</p>
         </div>
@@ -192,35 +179,40 @@ export default function StatistiquesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatsCard title="Courriers Assignés" value={stats.totalDocs} icon="📄" color="blue" />
-        <StatsCard title="Total Tâches reçues" value={stats.totalTasks} icon="📥" color="indigo" />
-        <StatsCard title="Répartition par entité (Tâches)" value={Object.values(docCountsById).reduce((a, b) => a + b, 0)} icon="👥" color="emerald" />
+      <div className="flex justify-center">
+        {loading ? (
+          <div className="h-32 w-full max-w-md bg-slate-100 rounded-3xl animate-pulse" />
+        ) : (
+          <div className="w-full max-w-md">
+            <StatsCard title="Courriers Assignés" value={stats.totalDocs} icon="📄" color="blue" />
+          </div>
+        )}
       </div>
 
       {/* Main Chart */}
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 h-[400px]">
+      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100" style={{ height: '450px' }}>
         <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
           <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
-          Évolution mensuelle
+          {monthFilter === 'all' ? 'Évolution annuelle (Papier vs E-mail)' : `Évolution quotidienne`}
         </h3>
-        <ResponsiveContainer width="100%" height="85%">
-          <AreaChart data={stats.monthlyEvolution}>
-            <defs>
-              <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
-            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-            <Tooltip 
-              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-            />
-            <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorValue)" />
-          </AreaChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <div className="w-full h-full bg-slate-50 rounded-2xl animate-pulse" />
+        ) : (
+          <ResponsiveContainer width="100%" height="85%">
+            <BarChart data={stats.monthlyEvolution}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11}} dy={10} interval={0} />
+              <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+              <Tooltip 
+                cursor={{fill: '#f8fafc', radius: 4}}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+              />
+              <Legend verticalAlign="top" iconType="circle" />
+              <Bar dataKey="courriers" name="Courriers (Papier/Fax...)" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="courriels" name="Courriels (E-mails)" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

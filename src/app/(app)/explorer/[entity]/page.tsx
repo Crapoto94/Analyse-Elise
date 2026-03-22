@@ -17,7 +17,7 @@ export default function EntityPage({ params }: { params: Promise<{ entity: strin
   const info = getEntityInfo(entity);
 
   useEffect(() => {
-    const savedConfig = sessionStorage.getItem('odata_config');
+    const savedConfig = localStorage.getItem('odata_config');
     if (!savedConfig) {
       router.push('/connect');
       return;

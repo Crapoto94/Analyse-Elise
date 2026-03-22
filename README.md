@@ -29,8 +29,25 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Déploiement Docker (Proxmox/Production)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Ce projet est optimisé pour un déploiement via Docker Compose, idéal pour un environnement Proxmox.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 1. Préparation
+Assurez-vous que le dossier `prisma` contient votre base de données `system.db` ou qu'il est prêt à être monté.
+
+### 2. Lancement
+Exécutez la commande suivante à la racine du projet :
+
+```bash
+docker compose up -d --build
+```
+
+### 3. Vérification
+L'application sera accessible sur le port **5002**. Vous pouvez vérifier la santé du conteneur avec :
+```bash
+docker compose ps
+```
+
+### Configuration OData
+Les identifiants de connexion OData sont configurés dans le fichier `docker-compose.yml`. En cas de changement, modifiez les variables `ODATA_USERNAME` et `ODATA_PASSWORD` puis redémarrez le conteneur.

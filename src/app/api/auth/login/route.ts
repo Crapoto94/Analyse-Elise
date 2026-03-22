@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prismaSystem } from '@/lib/prisma';
-import { hashPassword, createSession } from '@/lib/auth';
+import { hashPassword, createSession, verifyUser } from '@/lib/auth';
 
 export async function POST(req: Request) {
   try {
@@ -11,34 +10,21 @@ export async function POST(req: Request) {
     }
 
     const hashedPassword = hashPassword(password);
+    const isValid = await verifyUser(email, hashedPassword);
 
-    const user = await prismaSystem.user.findFirst({
-      where: {
-        email: email,
-        password: hashedPassword
-      }
-    });
-
-    if (!user) {
+    if (!isValid) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    await createSession({ email: user.email, role: user.role });
+    await createSession({ email: email, role: 'ADMIN' });
 
-    return NextResponse.json({ success: true, user: { email: user.email, role: user.role } });
+    return NextResponse.json({ success: true, user: { email: email, role: 'ADMIN' } });
 
   } catch (error: any) {
-    console.error('Login Error Deep Diagnostic:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      metaData: error.meta,
-      dbUrlSystem: process.env.DATABASE_URL_SYSTEM?.replace(/:[^:@]+@/, ':***@')
-    });
+    console.error('Login Error:', error);
     return NextResponse.json({ 
       error: 'Internal server error', 
-      details: error.message, 
-      code: error.code 
+      details: error.message
     }, { status: 500 });
   }
 }

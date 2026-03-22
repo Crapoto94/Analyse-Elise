@@ -4,27 +4,14 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_SYSTEM")
 }
 
-model FactDocument {
-  id          Int      @id @default(autoincrement())
-  externalId  Int      @unique
-  createdDate DateTime
-  theYear     Int
-  level1      String?
-  level2      String?
-  level3      String?
-  level4      String?
-  level5      String?
-}
-
-model FactTask {
-  id                           Int      @id @default(autoincrement())
-  externalId                   Int      @unique
-  documentId                   Int
-  assignedToStructureElementId Int
-  createdDate                  DateTime
+model User {
+  id       Int    @id @default(autoincrement())
+  email    String @unique
+  password String
+  role     String @default("user")
 }
 
 model SyncLog {
@@ -38,166 +25,7 @@ model SyncLog {
   message    String?
 }
 
-model GenericRecord {
-  id           Int      @id @default(autoincrement())
-  entitySet    String
-  externalId   String
-  data         String   // JSON payload of the entity
-  lastSyncDate DateTime @default(now())
-
-  @@unique([entitySet, externalId])
-}
-
-model sync_FactDocument {
-  id                             Int      @id @map("_id")
-  sync_date                      String?  @map("_sync_date")
-  external_id                    String?  @unique @map("_external_id")
-  Id                             Float?
-  Key                            String?
-  UpdatedTimestamp               String?
-  ArchivedByStructureElementId   Float?
-  ArchivedByStructureElementName String?
-  CreatedByStructureElementId    Float?
-  CreatedByStructureElementName  String?
-  DistributedByStructureElementId Float?
-  DistributedByStructureElementName String?
-  ClosedByStructureElementId     Float?
-  ClosedByStructureElementName   String?
-  SentByStructureElementId       Float?
-  SentByStructureElementName     String?
-  DocumentDateId                 Float?
-  DocumentDate                   String?
-  RecordDateId                   Float?
-  RecordDate                     String?
-  ClosedDateId                   Float?
-  ClosedDate                     String?
-  SentDateId                     Float?
-  SentDate                       String?
-  DistributedDateId              Float?
-  DistributedDate                String?
-  ArchivedDateId                 Float?
-  ArchivedDate                   String?
-  AlertDateId                    Float?
-  AlertDate                      String?
-  CreatedDateId                  Float?
-  CreatedDate                    String?
-  UpdatedDateId                  Float?
-  UpdatedDate                    String?
-  DueDateId                      Float?
-  DueDate                        String?
-  DirectionId                    Float?
-  AcknowledgmentLevelId          Float?
-  ConfidentialityLevelId         Float?
-  StateId                        Float?
-  PriorityId                     Float?
-  TypeId                         Float?
-  ClosureReasonId                Float?
-  MediumId                       Float?
-  Reported                       Int?
-  DocumentIdentifier             String?
-  Reference                      String?
-  SenderContactCompanyId         String?
-  SenderContactFunctionId        String?
-  SenderContactIndividualId      String?
-  RecipientContactCompanyId      String?
-  RecipientContactFunctionId     String?
-  RecipientContactIndividualId   String?
-
-  @@map("sync_FactDocument")
-}
-
-model sync_FactTask {
-  id                             Int      @id @map("_id")
-  sync_date                      String?  @map("_sync_date")
-  external_id                    String?  @unique @map("_external_id")
-  Id                             Float?
-  DocumentId                     Float?
-  UpdatedTimestamp               String?
-  TaskNumber                     Float?
-  ActivatedDateId                String?
-  ActivatedDate                  String?
-  RequestedDateId                Float?
-  RequestedDate                  String?
-  ResponseDateId                 Float?
-  ResponseDate                   String?
-  ValidationDateId               String?
-  ValidationDate                 String?
-  ActionDateId                   Float?
-  ActionDate                     String?
-  DueDateId                      String?
-  DueDate                        String?
-  CreatedByStructureElementId    Float?
-  CreatedByStructureElementName  String?
-  ActivatedByStructureElementId  String?
-  ActivatedByStructureElementName String?
-  RequestedByStructureElementId  Float?
-  RequestedByStructureElementName String?
-  AssignedToStructureElementId   Float?
-  AssignedToStructureElementName  String?
-  ResponseByStructureElementId   Float?
-  ResponseByStructureElementName String?
-  ValidatedByStructureElementId  Float?
-  ValidatedByStructureElementName String?
-  ActionByStructureElementId     Float?
-  ActionByStructureElementName   String?
-  RequestActive                  Int?
-  RequestIsValidationStep        Int?
-  RequestIsStepValidated         Int?
-  RequestIsAfterRefusal          String?
-  TaskProcessingTypeId           Float?
-  TaskSubProcessingTypeId        Float?
-  TaskCalculatedStateId          Float?
-  ResponseState                  Float?
-  ActionState                    Float?
-  ValidationState                Float?
-
-  @@map("sync_FactTask")
-}
-
-model sync_DimDocumentMedium {
-  id          Int      @id @map("_id")
-  external_id String?  @unique @map("_external_id")
-  Id          Float?
-  Key         String?
-  Label       String?
-  LabelFrFr   String?
-
-  @@map("sync_DimDocumentMedium")
-}
-
-model sync_DimDocumentType {
-  id          Int      @id @map("_id")
-  external_id String?  @unique @map("_external_id")
-  Id          Float?
-  Key         String?
-  Label       String?
-  LabelFrFr   String?
-
-  @@map("sync_DimDocumentType")
-}
-
-model sync_DimDocumentState {
-  id          Int      @id @map("_id")
-  external_id String?  @unique @map("_external_id")
-  Id          Float?
-  Key         String?
-  Label       String?
-  LabelFrFr   String?
-
-  @@map("sync_DimDocumentState")
-}
-
-model sync_DimStructureElementPath {
-  id          Int      @id @map("_id")
-  external_id String?  @unique @map("_external_id")
-  Path        String?
-  Id_OData    Float?   @map("Id")
-  Key         String?
-  Level1      String?
-  Level2      String?
-  Level3      String?
-  Level4      String?
-  Level5      String?
-
-  @@map("sync_DimStructureElementPath")
+model AppConfig {
+  key   String @id
+  value String
 }
