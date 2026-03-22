@@ -23,7 +23,7 @@ export async function getODataConfig() {
   };
 }
 
-export async function fetchDirectStats(year: number, month?: string, filters?: any) {
+export async function fetchStatsByFilters(year: number, month?: string, filters?: any) {
   const config = await getODataConfig();
   if (!config?.baseUrl) throw new Error('OData config missing');
 
@@ -220,6 +220,8 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     });
 
     console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElement: ${Object.keys(docToElement).length}`);
+    const sampleIds = Array.from(yearDocIds).slice(0, 5);
+    console.log(`[DEBUG COUNTS] sample yearDocIds: ${sampleIds.join(', ')}`);
 
     const getHierarchyWithCounts = (level: string, currentFilters?: any) => {
       const idsByName: Record<string, Set<number>> = {};
@@ -332,7 +334,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
   }
 }
 
-export async function fetchCabinetStats(year: number, month?: string) {
+export async function fetchCabinetEvolution(year: number, month?: string) {
   const config = await getODataConfig();
   if (!config?.baseUrl) throw new Error('OData config missing');
   const client = new ODataClient(config);

@@ -7,14 +7,18 @@ export async function GET(req: Request) {
   const month = searchParams.get('month');
 
   try {
-    const stats = await fetchDirectStats(year, month || 'all', {
-      pole: searchParams.get('pole'),
-      dga: searchParams.get('dga'),
-      dir: searchParams.get('dir'),
-      service: searchParams.get('service'),
-      status: searchParams.get('status')
-    });
-    return NextResponse.json({ ...stats, isLocal: false });
+    const pole = searchParams.get('pole');
+    const dga = searchParams.get('dga');
+    const dir = searchParams.get('dir');
+    const service = searchParams.get('service');
+    const status = searchParams.get('status');
+
+    const data = await fetchStatsByFilters(
+      year,
+      month || undefined,
+      { pole, dga, dir, service, status }
+    );
+    return NextResponse.json({ ...data, isLocal: false });
   } catch (err: any) {
     console.error('API Stats (Direct) Error:', err);
     return NextResponse.json({ error: 'OData Direct Error: ' + err.message }, { status: 500 });
