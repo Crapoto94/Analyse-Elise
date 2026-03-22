@@ -201,6 +201,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     
     // Filtrage sur les chemins uniques
     const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
+    console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
 
     // 4. Attribution : Chaque document est affecté à sa DERNIÈRE tâche de traitement (la plus récente)
     const docToElement: Record<number, number> = {};

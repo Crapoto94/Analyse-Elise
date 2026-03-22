@@ -14,17 +14,6 @@ model User {
   role     String @default("user")
 }
 
-model SyncLog {
-  id         Int      @id @default(autoincrement())
-  startTime  DateTime
-  endTime    DateTime
-  durationMs Int
-  docsCount  Int
-  tasksCount Int
-  status     String
-  message    String?
-}
-
 model AppConfig {
   key   String @id
   value String

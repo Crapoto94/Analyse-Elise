@@ -136,12 +136,18 @@ export class ODataClient {
       targetUrl = `${base}${cleanPath}${query}`;
     }
     
+    console.log(`[ODATA REQUEST] ${options.method || 'GET'} ${targetUrl}`);
+    const start = Date.now();
     const response = await this.fetchWithProxy(targetUrl, options);
+    const duration = Date.now() - start;
     
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`[ODATA ERROR] ${response.status} after ${duration}ms: ${errorText}`);
       throw new Error(`OData request failed: ${response.status} ${response.statusText} - ${errorText}`);
     }
+    
+    console.log(`[ODATA SUCCESS] ${response.status} in ${duration}ms`);
 
     const text = await response.text();
     try {

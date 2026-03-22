@@ -7,9 +7,11 @@ export async function GET() {
     const users = await prismaSystem.user.findMany({
       select: { id: true, email: true, role: true }
     });
-    return NextResponse.json(users);
+    return NextResponse.json(Array.isArray(users) ? users : []);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[API USERS] Error fetching users:", err);
+    // On renvoie un tableau vide plutôt qu'une erreur 500 pour éviter le crash client
+    return NextResponse.json([]);
   }
 }
 
