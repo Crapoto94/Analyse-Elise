@@ -320,8 +320,13 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         });
       }
 
-      // 3. Calcul final des comptes uniques par entité
+      // 3. Calcul final des comptes uniques par entité avec PURGE des Affectations directes (Anti-Redondance Verticale)
       const map: Record<string, number> = {};
+      const directKey = '(Affectations directes)';
+      
+      const docsInSpecificEntities = new Set<number>();
+      const specificEntitiesMap: Record<string, Set<number>> = {};
+      let directDocsSet = new Set<number>();
 
       Object.entries(idsByName).forEach(([name, idSet]) => {
         const uniqueDocsInEntity = new Set<number>();
@@ -333,10 +338,23 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
           }
         });
         
-        // N'inclure que les éléments avec au moins 1 affectation
-        if (uniqueDocsInEntity.size > 0) {
-          map[name] = uniqueDocsInEntity.size;
+        if (name === directKey) {
+           directDocsSet = uniqueDocsInEntity;
+        } else {
+           specificEntitiesMap[name] = uniqueDocsInEntity;
+           uniqueDocsInEntity.forEach(id => docsInSpecificEntities.add(id));
         }
+      });
+      
+      // Affectations directes ne garde QUE les orphelins (Ceux qui n'ont aucune affectation plus spécifique au même niveau)
+      const filteredDirectDocs = new Set([...directDocsSet].filter(id => !docsInSpecificEntities.has(id)));
+      
+      // Alimentation Finale
+      if (filteredDirectDocs.size > 0) {
+        map[directKey] = filteredDirectDocs.size;
+      }
+      Object.entries(specificEntitiesMap).forEach(([name, uniqueSet]) => {
+        if (uniqueSet.size > 0) map[name] = uniqueSet.size;
       });
       
       return Object.entries(map)
