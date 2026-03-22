@@ -6,9 +6,15 @@ export async function GET(req: Request) {
   const yearVal = parseInt(searchParams.get('year') || '0');
   const monthVal = searchParams.get('month') || 'all';
   const type = searchParams.get('type') || 'all';
+  const status = searchParams.get('status') || 'all';
+  const pole = searchParams.get('pole') || 'all';
+  const dga = searchParams.get('dga') || 'all';
+  const dir = searchParams.get('dir') || 'all';
+  const service = searchParams.get('service') || 'all';
 
   try {
-    const data = await fetchCabinetEvolution(yearVal || new Date().getFullYear(), monthVal === 'all' ? undefined : monthVal);
+    const filters = { pole, dga, dir, service, status };
+    const data = await fetchCabinetEvolution(yearVal || new Date().getFullYear(), monthVal === 'all' ? undefined : monthVal, filters);
     return NextResponse.json({ ...data, type });
   } catch (err: any) {
     console.error('Cabinet V2 API (Direct) Error:', err);

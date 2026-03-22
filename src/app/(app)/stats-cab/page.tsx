@@ -184,7 +184,7 @@ export default function StatsCabinetPage() {
                     className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-xs font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm"
                   >
                     <option value={0}>Toutes les années</option>
-                    {(availableYears.length > 0 ? availableYears.sort((a,b) => b-a) : [2026, 2025, 2024]).map(y => (
+                    {(availableYears.length > 0 ? availableYears.sort((a,b) => b-a) : Array.from({length: new Date().getFullYear() - 2015 + 2}, (_, i) => 2015 + i).sort((a,b) => b-a)).map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
                   </select>
@@ -284,18 +284,7 @@ export default function StatsCabinetPage() {
       <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-1">Évolution des Flux</h3>
             <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Transitions Papier vs Digital</h2>
-          </div>
-          <div className="flex gap-4">
-             <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Papier</span>
-             </div>
-             <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-indigo-600"></div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Courriel / Mail</span>
-             </div>
           </div>
         </div>
         <div className="w-full" style={{ height: '350px' }}>
@@ -318,8 +307,8 @@ export default function StatsCabinetPage() {
                <Tooltip 
                  contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900, fontSize: '12px' }}
                />
-               <Bar dataKey="courriers" name="Papier" stackId="a" fill="#3b82f6" />
-               <Bar dataKey="courriels" name="E-mail" stackId="a" fill="#f59e0b" radius={[10, 10, 0, 0]} />
+               <Bar dataKey="courriels" name="E-mail" stackId="a" fill="#f59e0b" />
+               <Bar dataKey="courriers" name="Papier" stackId="a" fill="#3b82f6" radius={[10, 10, 0, 0]} />
              </BarChart>
            </ResponsiveContainer>
         </div>
@@ -442,7 +431,7 @@ export default function StatsCabinetPage() {
                     <div className="flex-1">
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 italic">
-                          {svc.service || 'Service Inconnu'}
+                          {svc.service || '(Affectations directes)'}
                         </span>
                         <span className="text-xs font-black text-gray-900 dark:text-white">{svc.count}</span>
                       </div>

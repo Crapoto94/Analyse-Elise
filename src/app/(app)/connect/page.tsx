@@ -115,10 +115,13 @@ export default function ConnectPage() {
         body: JSON.stringify(config)
       });
       
+      
       if (!res.ok) {
-        alert('Erreur lors de la sauvegarde sur le serveur');
+        const errData = await res.json().catch(() => ({}));
+        alert(`Erreur lors de la sauvegarde: ${errData.error || res.statusText}`);
         return;
       }
+
       
       alert('Configuration enregistrée sur le serveur');
       router.push('/explorer');

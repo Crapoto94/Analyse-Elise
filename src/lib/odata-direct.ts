@@ -85,19 +85,25 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         }
       });
 
-      // Attribution STRICTE Tâches (Nouveau modèle v0.1.33)
-      const docToAssignment = new Map<number, any>();
+      // Attribution STRICTE Tâches: La tâche avec le plus grand TaskNumber prime (Affectation Actuelle)
+      const docToAssignment = new Map<number, { path: any; taskNum: number }>();
       
-      // Surcharge: Tâche la plus RECENTE
       taskDocs.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
-        if (path) docToAssignment.set(t.DocumentId, path);
+        if (path) {
+          const tN = t.TaskNumber || 0;
+          const current = docToAssignment.get(t.DocumentId);
+          if (!current || tN > current.taskNum) {
+            docToAssignment.set(t.DocumentId, { path, taskNum: tN });
+          }
+        }
       });
 
       const initialCount = docs.length;
       docs = docs.filter((d: any) => {
-        const path = docToAssignment.get(d.Id);
-        if (!path) return false; // On ne compte que les docs ayant une tâche d'exécution
+        const assign = docToAssignment.get(d.Id);
+        if (!assign) return false; 
+        const path = assign.path;
         
         if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
         if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
@@ -289,8 +295,16 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         });
       } else {
         // Logique standard pour Pôle, DGA, Direction
+        if (level === 'Level3' || level === 'Level4') {
+           idsByName['(Affectations directes)'] = new Set();
+        }
+        
         allPaths.forEach(p => {
-          const name = (p[level] || '').trim();
+          let name = (p[level] || '').trim();
+          if (!name && (level === 'Level3' || level === 'Level4')) {
+             name = '(Affectations directes)';
+          }
+
           if (name && idsByName.hasOwnProperty(name)) {
             let matches = true;
             if (currentFilters) {
@@ -325,9 +339,11 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
           }
         });
         
-        // Inclure TOUS les éléments même ceux avec 0 courriers (v0.1.41)
-        map[name] = uniqueDocsInEntity.size;
-        uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
+        // N'inclure que les éléments avec au moins 1 affectation
+        if (uniqueDocsInEntity.size > 0) {
+          map[name] = uniqueDocsInEntity.size;
+          uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
+        }
       });
       
       const totalSum = Object.values(map).reduce((a, b) => a + b, 0);
@@ -351,7 +367,7 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
   }
 }
 
-export async function fetchCabinetEvolution(year: number, month?: string) {
+export async function fetchCabinetEvolution(year: number, month?: string, filters?: any) {
   const config = await getODataConfig();
   if (!config?.baseUrl) throw new Error('OData config missing');
   const client = new ODataClient(config);
@@ -368,12 +384,16 @@ export async function fetchCabinetEvolution(year: number, month?: string) {
       docFilter = `CreatedDate ge ${start} and CreatedDate lt ${end}`;
     }
 
-    // Provision de tâches un peu plus large (+15j)
-    const taskEnd = new Date(year + 1, 0, 15).toISOString();
+    // Provision de tâches beaucoup plus large (+6 mois de N+1) pour capter les affectations tardives
+    const taskEnd = new Date(year + 1, 5, 1).toISOString(); // 1er Juin N+1
     const taskFilter = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
 
+    // DEBUG DUMP TASK TYPES
+    const taskTypesRaw = await client.requestAll<any>("DimTaskProcessingType?$select=Id,LabelFrFr");
+    require('fs').writeFileSync('c:/dev/Stat_Elise_New/tasktypes.json', JSON.stringify(taskTypesRaw, null, 2));
+
     // 1. Chargement Parallèle (Docs + Tâches + Dimensions)
-    const [docs, taskDocs, allPathsRaw, allTypesRaw] = await Promise.all([
+    const [docsRaw, taskDocs, allPathsRaw, allTypesRaw] = await Promise.all([
       client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId`),
       client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber`),
       (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5"),
@@ -403,10 +423,49 @@ export async function fetchCabinetEvolution(year: number, month?: string) {
 
     // 2. Classification et Affectations
     const docToTasks = new Map<number, any[]>();
-    taskDocs.forEach((t: any) => {
+    taskDocs.forEach(t => {
+      // Historique complet pour de multiples affectations
       if (!docToTasks.has(t.DocumentId)) docToTasks.set(t.DocumentId, []);
       docToTasks.get(t.DocumentId)?.push(t);
     });
+
+    let docs = docsRaw;
+    // Pré-filtrage global des documents (état et hiérarchie)
+    if (filters && (filters.status !== 'all' || filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
+      docs = docs.filter((doc: any) => {
+        // Filter by status
+        if (filters.status && filters.status !== 'all') {
+          if (filters.status === 'cloture' && doc.StateId !== 46) return false;
+          if (filters.status === 'en_cours' && doc.StateId === 46) return false;
+          if (filters.status === 'traite' && doc.StateId !== 45) return false;
+        }
+
+        // Filter by hierarchy (Si un document a AU MOINS UNE TACHE qui matche le filtre, on le garde)
+        if (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all') {
+          const tasks = docToTasks.get(doc.Id) || [];
+          let hasMatchingTask = false;
+          for (const t of tasks) {
+            const path = pathMap.get(t.AssignedToStructureElementId);
+            if (path) {
+              let match = true;
+              if (filters.pole !== 'all' && path.pole !== filters.pole) match = false;
+              if (filters.dga !== 'all' && path.dga !== filters.dga) match = false;
+              if (filters.dir !== 'all' && path.dir !== filters.dir) match = false;
+              if (filters.service !== 'all') {
+                if (filters.service === '(Affectations directes)') {
+                   if (path.service) match = false;
+                } else {
+                   if (path.service !== filters.service) match = false;
+                }
+              }
+              if (match) hasMatchingTask = true;
+            }
+          }
+          if (!hasMatchingTask) return false;
+        }
+        return true;
+      });
+    }
 
     const chartSize = isMonthly ? 12 : new Date(year, parseInt(month || '1'), 0).getDate();
     const entrants = {
@@ -442,23 +501,46 @@ export async function fetchCabinetEvolution(year: number, month?: string) {
       const nature = typeMap.get(doc.TypeId) || 'Autre';
       entrants.byNature[nature] = (entrants.byNature[nature] || 0) + 1;
 
-      // Classification Muni/Courant
       const tasks = docToTasks.get(doc.Id) || [];
       let isMuni = false;
       let isCourant = false;
       
+      // La qualification Muni/Courant dépend de tout l'historique du document
+      tasks.forEach((t: any) => {
+        const p = pathMap.get(t.AssignedToStructureElementId);
+        if (p?.isMuni) isMuni = true;
+        if (p && !p.isMuni) isCourant = true;
+      });
+
+      const seenAssignmentsForThisDoc = new Set<string>();
+
       tasks.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
         if (path) {
           if (path.isMuni) isMuni = true;
           else isCourant = true;
           
-          // Accumulate assignments for the table
-          const key = `${path.dir}|${path.service}`;
-          if (!assignmentsSet.has(key)) {
-            assignmentsSet.set(key, { direction: path.dir, dga: path.dga, service: path.service, count: 0 });
+          let addIt = true;
+          if (filters) {
+            if (filters.pole !== 'all' && path.pole !== filters.pole) addIt = false;
+            if (filters.dga !== 'all' && path.dga !== filters.dga) addIt = false;
+            if (filters.dir !== 'all' && path.dir !== filters.dir) addIt = false;
+            if (filters.service !== 'all') {
+              if (filters.service === '(Affectations directes)' && path.service) addIt = false;
+              if (filters.service !== '(Affectations directes)' && path.service !== filters.service) addIt = false;
+            }
           }
-          assignmentsSet.get(key).count++;
+          
+          if (addIt) {
+            const key = `${path.dir}|${path.service}`;
+            if (!seenAssignmentsForThisDoc.has(key)) {
+              seenAssignmentsForThisDoc.add(key);
+              if (!assignmentsSet.has(key)) {
+                assignmentsSet.set(key, { direction: path.dir, dga: path.dga, service: path.service, count: 0 });
+              }
+              assignmentsSet.get(key).count++;
+            }
+          }
         }
       });
 
