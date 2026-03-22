@@ -48,6 +48,9 @@ export async function createSession(user: { email: string, role: string }) {
     ? cleanEnv(process.env.SESSION_SECURE) === 'true'
     : process.env.NODE_ENV === 'production';
 
+  const sameSite = isSecure ? 'none' : 'lax';
+  console.log(`[AUTH DEBUG] Creating session: isSecure=${isSecure} | sameSite=${sameSite} | nodeEnv=${process.env.NODE_ENV}`);
+
   const cookieStore = await cookies();
   cookieStore.set('elise_session', sessionToken, {
     expires,
