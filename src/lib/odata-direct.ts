@@ -102,7 +102,14 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
         if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
         if (filters.dir !== 'all' && path.dir !== filters.dir) return false;
-        if (filters.service !== 'all' && path.service !== filters.service) return false;
+        if (filters.service !== 'all') {
+          // '(Affectations directes)' = éléments n'ayant pas de service (Level5 vide)
+          if (filters.service === '(Affectations directes)') {
+            if (path.service) return false;
+          } else {
+            if (path.service !== filters.service) return false;
+          }
+        }
         return true;
       });
       console.log(`[DEBUG STATS] Strict Task Filter: ${initialCount} -> ${docs.length}`);
@@ -218,8 +225,8 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       }
     });
     
-    // Filtrage sur les chemins uniques
-    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
+    // structurePaths inclut tous les éléments (SERVICE, USER, vide) pour montrer les 0 aussi
+    const structurePaths = allPaths; // On ne filtre plus par type pour inclure individus et entités é 0
     console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
 
     const countsByElementId: Record<number, Set<number>> = {};
@@ -318,10 +325,9 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
           }
         });
         
-        if (uniqueDocsInEntity.size > 0) {
-          map[name] = uniqueDocsInEntity.size;
-          uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
-        }
+        // Inclure TOUS les éléments même ceux avec 0 courriers (v0.1.41)
+        map[name] = uniqueDocsInEntity.size;
+        uniqueDocsInEntity.forEach(id => globallySeenInThisLevel.add(id));
       });
       
       const totalSum = Object.values(map).reduce((a, b) => a + b, 0);
