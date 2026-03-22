@@ -12,10 +12,14 @@ export function hashPassword(password: string) {
 
 export async function verifyUser(email: string, passwordHash: string) {
   // Check in DB
-  const user = await prismaSystem.user.findUnique({
-    where: { email }
-  });
-  if (user && user.password === passwordHash) return user;
+  try {
+    const user = await prismaSystem.user.findUnique({
+      where: { email }
+    });
+    if (user && user.password === passwordHash) return user;
+  } catch (e) {
+    console.warn('[AUTH] DB check failed (table might be missing), falling back to env');
+  }
 
   // Fallback to Env-based Admin
   if (!ADMIN_PASSWORD_HASH) {
