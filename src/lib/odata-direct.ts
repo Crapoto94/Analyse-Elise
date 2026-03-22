@@ -206,6 +206,20 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 
     const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
 
+    // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
+    const allPaths: any[] = [];
+    const seenElementIds = new Set<number>();
+    allPathsRaw.forEach((p: any) => {
+      if (!seenElementIds.has(p.Id)) {
+        seenElementIds.add(p.Id);
+        allPaths.push(p);
+      }
+    });
+    
+    // Filtrage sur les chemins uniques
+    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
+    console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
+
     const countsByElementId: Record<number, Set<number>> = {};
     Object.entries(docToElement).forEach(([docId, elementId]) => {
       if (!countsByElementId[elementId]) countsByElementId[elementId] = new Set();
