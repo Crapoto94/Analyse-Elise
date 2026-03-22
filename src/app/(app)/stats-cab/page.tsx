@@ -323,29 +323,6 @@ export default function StatsCabinetPage() {
         <CompactStatsCard title="Délai de Réponse" value={`${Math.round(averageDelay || 0)} j`} icon="⏱️" color="indigo" />
       </div>
 
-      {/* Secondary KPIs: Muni vs Courant + Shared */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-center flex flex-col justify-center">
-            <p className="text-sm font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">Municipalité</p>
-            <h3 className="text-5xl font-black text-blue-700 dark:text-blue-200">{entrants?.muniCount || 0}</h3>
-            <p className="text-xs text-gray-400 mt-2 italic font-medium">Cabinet & Élus</p>
-        </div>
-
-        <div className="bg-blue-600 text-white p-8 rounded-2xl shadow-xl shadow-blue-200 dark:shadow-none flex flex-col justify-center items-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-               <span className="text-8xl font-black tracking-tighter">DUAL</span>
-            </div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] mb-3 opacity-90">Assignations Communes</p>
-            <h3 className="text-6xl font-black mb-2">{entrants?.sharedCount || 0}</h3>
-            <p className="text-sm font-medium opacity-80 text-center">Documents attribués à la fois en Muni et en Courant</p>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 text-center flex flex-col justify-center">
-            <p className="text-sm font-bold text-indigo-500 dark:text-indigo-400 uppercase tracking-wider mb-2">Courant</p>
-            <h3 className="text-5xl font-black text-indigo-600 dark:text-indigo-200">{entrants?.courantCount || 0}</h3>
-            <p className="text-xs text-gray-400 mt-2 italic font-medium">Administration & DGS</p>
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Monthly Evolution */}
@@ -472,20 +449,29 @@ export default function StatsCabinetPage() {
               <p className="text-2xl font-black text-red-700 dark:text-green-300">{entrants?.deadlines?.exceeded || 0}</p>
             </div>
           </div>
-          <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 flex flex-col justify-center">
-             <div className="flex justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Taux de succès</span>
-                <span className="text-sm font-black text-gray-900 dark:text-white">
-                   {entrants?.total > 0 ? Math.round((( (entrants.deadlines?.within30 || 0) + (entrants.deadlines?.within60 || 0) ) / entrants.total) * 100) : 0}%
-                </span>
-             </div>
-             <div className="w-full bg-gray-200 dark:bg-gray-600 h-2.5 rounded-full overflow-hidden">
-                <div 
-                  className="bg-green-500 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
-                  style={{ width: `${entrants?.total > 0 ? (((entrants.deadlines?.within30 || 0) + (entrants.deadlines?.within60 || 0)) / entrants.total) * 100 : 0}%` }}
-                ></div>
-             </div>
-          </div>
+          {(() => {
+             const success = (entrants?.deadlines?.within30 || 0) + (entrants?.deadlines?.within60 || 0);
+             const failed = (entrants?.deadlines?.exceeded || 0);
+             const totalClosed = success + failed;
+             const ratio = totalClosed > 0 ? Math.round((success / totalClosed) * 100) : 0;
+             return (
+               <div className="p-5 rounded-2xl bg-gray-50 dark:bg-gray-700/50 border border-gray-100 dark:border-gray-600 flex flex-col justify-center">
+                  <div className="flex justify-between mb-2">
+                     <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Taux de succès</span>
+                     <span className="text-sm font-black text-gray-900 dark:text-white">
+                        {ratio}%
+                     </span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 h-2.5 rounded-full overflow-hidden">
+                     <div 
+                       className="bg-green-500 h-full transition-all duration-1000 shadow-[0_0_10px_rgba(34,197,94,0.3)]" 
+                       style={{ width: `${ratio}%` }}
+                     ></div>
+                  </div>
+                  <p className="text-[8px] text-gray-400 mt-2 text-right uppercase tracking-wider">Sur {totalClosed} dossiers clôturés</p>
+               </div>
+             );
+          })()}
         </div>
       </div>
     </div>
