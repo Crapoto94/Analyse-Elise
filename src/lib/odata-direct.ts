@@ -194,8 +194,8 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     const uniqueTypes = [...new Set(allPaths.map((p: any) => p.StructureElementTypeKey))];
     console.log(`[HIERARCHY DEBUG] Unique types: ${uniqueTypes.join(', ')}`);
     
-    // Filtrage strict : que les services (évite les USERS qui apparaissent en pôles)
-    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE');
+    // Filtrage plus souple : les services OU ce qui n'a pas de type (souvent les pôles racines)
+    const structurePaths = allPaths.filter((p: any) => p.StructureElementTypeKey === 'SERVICE' || !p.StructureElementTypeKey || p.StructureElementTypeKey === '');
 
     // 4. Attribution : Chaque document est affecté à sa DERNIÈRE tâche de traitement (la plus récente)
     const docToElement: Record<number, number> = {};
@@ -280,12 +280,13 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 
       // 3. Calcul final des comptes uniques par entité
       const map: Record<string, number> = {};
+      const globallySeenDocs = new Set<number>(); // Pour éviter de compter le même doc dans deux entités différentes du même niveau si nécessaire, mais ici on veut surtout l'unicité par NOM d'entité.
+      
       Object.entries(idsByName).forEach(([name, idSet]) => {
         const uniqueDocsInLevel = new Set<number>();
         idSet.forEach(structId => {
-          const docSet = countsByElementId[structId];
-          if (docSet) {
-            docSet.forEach((did: number) => uniqueDocsInLevel.add(did));
+          if (countsByElementId[structId]) {
+            countsByElementId[structId].forEach(docId => uniqueDocsInLevel.add(docId));
           }
         });
         if (uniqueDocsInLevel.size > 0) {
