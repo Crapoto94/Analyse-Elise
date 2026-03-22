@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchDirectStats } from '@/lib/odata-direct';
+import { fetchStatsByFilters } from '@/lib/odata-direct';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);

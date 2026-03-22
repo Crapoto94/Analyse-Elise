@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchCabinetStats } from '@/lib/odata-direct';
+import { fetchCabinetEvolution } from '@/lib/odata-direct';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
