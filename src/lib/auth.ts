@@ -52,8 +52,8 @@ export async function createSession(user: { email: string, role: string }) {
   cookieStore.set('elise_session', sessionToken, {
     expires,
     httpOnly: true,
-    secure: isSecure,
-    sameSite: 'lax',
+    secure: isSecure, // Garde la valeur calculée mais on s'assure qu'elle est false en HTTP
+    sameSite: isSecure ? 'none' : 'lax', // Lax est plus compatible pour HTTP sans SSL
     path: '/',
   });
 }
