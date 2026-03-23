@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ODataClient, ODataConfig } from '@/lib/odata';
 import { 
   Database, 
   Users, 
@@ -20,12 +21,9 @@ import {
   ShieldCheck,
   Server
 } from 'lucide-react';
-import { ODataClient, ODataConfig } from '@/lib/odata';
-
-type TabType = 'sql' | 'users' | 'odata' | 'logs' | 'audit';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('sql');
+  const [activeTab, setActiveTab] = useState<'sql' | 'users' | 'config' | 'audit'>('sql');
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -44,319 +42,608 @@ export default function SettingsPage() {
     checkSession();
   }, [router]);
 
-  if (loading || !session) return (
-    <div className="flex items-center justify-center min-vh-screen">
-      <div className="relative">
-        <div className="h-16 w-16 rounded-full border-4 border-slate-100 border-t-indigo-600 animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-indigo-600 uppercase tracking-widest">BI</div>
-      </div>
-    </div>
-  );
+  if (loading || !session) return <div className="flex items-center justify-center min-h-[400px]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
 
   const tabs = [
-    { id: 'sql', label: 'Données', icon: <Database className="w-4 h-4" /> },
-    { id: 'odata', label: 'Connexion Data', icon: <Cloud className="w-4 h-4" /> },
-    { id: 'audit', label: 'Audit API', icon: <History className="w-4 h-4" /> },
-    { id: 'users', label: 'Accès', icon: <Users className="w-4 h-4" /> }
+    { id: 'sql', label: 'Base de données', icon: '🗄️' },
+    { id: 'users', label: 'Utilisateurs', icon: '👥' },
+    { id: 'config', label: 'Connexion OData', icon: '☁️' },
+    { id: 'audit', label: 'Audit API', icon: '📋' }
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 p-4 md:p-8 space-y-8">
-      {/* Header Premium */}
-      <div className="relative overflow-hidden bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/40 dark:shadow-none">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[100px] -mr-32 -mt-32"></div>
-        <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 bg-indigo-600 text-white rounded-2xl shadow-lg shadow-indigo-200">
-                <Settings2 className="w-5 h-5" />
-              </div>
-              <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-none">Administration</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-xs uppercase tracking-[0.2em] ml-11">Configuration & Supervision du Système</p>
-          </div>
-          
-          <div className="flex bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-[26px] gap-1 shrink-0 border border-slate-200/50 dark:border-slate-700/50">
-             {tabs.map(tab => (
-               <button
-                 key={tab.id}
-                 onClick={() => setActiveTab(tab.id as TabType)}
-                 className={`flex items-center gap-2.5 px-6 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 transform ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-500/30 -translate-y-0.5' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800 shadow-none hover:shadow-md'}`}
-               >
-                 {tab.icon}
-                 <span className="hidden sm:inline-block">{tab.label}</span>
-               </button>
-             ))}
-          </div>
+    <div className="p-8 max-w-[1600px] mx-auto space-y-8 pb-32">
+      {/* Header Area */}
+      <div className="flex justify-between items-end mb-4 px-2">
+        <div>
+          <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter italic flex items-center gap-3">
+            <span className="w-2 h-10 bg-blue-600 rounded-full"></span>
+            Administration
+          </h1>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-2">Pilotage Système & Gouvernance OData</p>
         </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="transition-all duration-500 ease-in-out">
-        {activeTab === 'sql' && <SqlExplorerTab />}
-        {activeTab === 'odata' && <ODataConfigTab />}
-        {activeTab === 'audit' && <AuditLogsTab />}
-        {activeTab === 'users' && <UsersTab />}
+      <div className="flex gap-8 items-start">
+        {/* Left Sub-Sidebar Nav */}
+        <div className="w-64 shrink-0 space-y-2 sticky top-8">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 group ${
+                activeTab === tab.id 
+                  ? 'bg-blue-600 text-white shadow-2xl shadow-blue-500/40 translate-x-2' 
+                  : 'text-gray-400 hover:bg-white/80 dark:hover:bg-gray-800/80 hover:text-gray-900 dark:hover:text-white border border-transparent hover:border-gray-100 dark:hover:border-gray-700'
+              }`}
+            >
+              <span className={`text-xl transition-transform group-hover:scale-120 ${activeTab === tab.id ? 'scale-110' : ''}`}>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Main Content Area (Glassmorphism) */}
+        <div className="flex-1 bg-white/70 dark:bg-gray-900/40 backdrop-blur-3xl rounded-[3rem] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:shadow-none min-h-[750px] overflow-hidden">
+          {activeTab === 'sql' && <RestoredSqlExplorer />}
+          {activeTab === 'users' && <UsersTab />}
+          {activeTab === 'config' && <ConfigTab />}
+          {activeTab === 'audit' && <AuditLogsTab />}
+        </div>
       </div>
     </div>
   );
 }
 
 // --------------------------------------------------------------------------------
-// 1. REFINED SQL EXPLORER
+// 1. RESTORED SQL EXPLORER (Premium Redesign)
 // --------------------------------------------------------------------------------
-function SqlExplorerTab() {
+function RestoredSqlExplorer() {
+  const [dbType, setDbType] = useState<'system' | 'entities'>('entities');
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState<string>('');
-  const [columns, setColumns] = useState<any[]>([]);
+  const [columns, setColumns] = useState<{ name: string; type: string }[]>([]);
   const [data, setData] = useState<any[]>([]);
+  const [indexes, setIndexes] = useState<{ name: string; sql: string }[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [loadingTables, setLoadingTables] = useState(true);
 
-  useEffect(() => {
-    const fetchTables = async () => {
-      const res = await fetch('/api/sql-explorer');
+  useEffect(() => { fetchTables(); }, [dbType]);
+
+  const fetchTables = async () => {
+    setLoadingTables(true);
+    try {
+      const res = await fetch(`/api/sql-explorer?db=${dbType}`);
       const json = await res.json();
       setTables(json.tables || []);
-    };
-    fetchTables();
-  }, []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); setLoadingTables(false); }
+  };
 
   const fetchTableData = async (table: string) => {
     setLoading(true);
     setSelectedTable(table);
     try {
-      const res = await fetch(`/api/sql-explorer?table=${table}&limit=100`);
+      const res = await fetch(`/api/sql-explorer?table=${table}&db=${dbType}&limit=200`);
       const json = await res.json();
       setColumns(json.columns || []);
       setData(json.data || []);
+      setIndexes(json.indexes || []);
+      setTotalCount(json.count ?? (json.data || []).length);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
-  const filteredTables = tables.filter(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <div className="lg:col-span-1 space-y-4">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input 
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            placeholder="Rechercher une table..."
-            className="w-full pl-11 pr-4 py-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl text-xs font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-300 transition-all"
-          />
+    <div className="flex h-[750px]">
+      {/* Tables Sub-Sidebar */}
+      <div className="w-80 border-r border-gray-100 dark:border-gray-800 bg-gray-50/30 dark:bg-gray-900/10 flex flex-col overflow-hidden">
+        <div className="p-6 space-y-4 border-b border-gray-100 dark:border-gray-800">
+           <div className="flex p-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
+             <button 
+               onClick={() => { setDbType('entities'); setSelectedTable(''); setData([]); }}
+               className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${dbType === 'entities' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}
+             >Entités</button>
+             <button 
+               onClick={() => { setDbType('system'); setSelectedTable(''); setData([]); }}
+               className={`flex-1 py-2 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all ${dbType === 'system' ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}
+             >Système</button>
+           </div>
+           <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Base de données</span>
+              <span className="text-[9px] font-black text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">{tables.length} tables</span>
+           </div>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-100 dark:border-slate-800 p-4 space-y-1 overflow-y-auto max-h-[600px] shadow-lg shadow-slate-200/20 dark:shadow-none">
-          {filteredTables.map(t => (
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+          {tables.map(t => (
             <button 
-              key={t}
-              onClick={() => fetchTableData(t)}
-              className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl text-[11px] font-black uppercase tracking-tight transition-all ${selectedTable === t ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+              key={t} 
+              onClick={() => fetchTableData(t)} 
+              className={`w-full group text-left p-4 rounded-2xl transition-all border ${
+                selectedTable === t 
+                  ? (dbType === 'entities' ? 'bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-500/20' : 'bg-gray-900 text-white border-gray-800 shadow-xl shadow-gray-900/20') 
+                  : 'bg-white dark:bg-gray-800 border-gray-50 dark:border-gray-700 hover:border-blue-200 hover:shadow-lg dark:hover:border-gray-600'
+              }`}
             >
-              <div className="flex items-center gap-3">
-                <Database className={`w-3.5 h-3.5 ${selectedTable === t ? 'text-indigo-200' : 'text-slate-300'}`} />
-                <span>{t.replace('sync_', '')}</span>
+              <div className="flex items-center justify-between mb-1">
+                 <div className={`w-2 h-2 rounded-full ${t.startsWith('sync_') ? 'bg-amber-400' : 'bg-blue-400'} ${selectedTable === t ? 'animate-pulse bg-white' : ''}`}></div>
+                 {t.startsWith('sync_') && <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${selectedTable === t ? 'bg-white/20' : 'bg-amber-100 text-amber-600'}`}>Synchro</span>}
               </div>
-              {selectedTable === t && <ChevronRight className="w-3 h-3" />}
+              <p className={`text-[11px] font-black truncate tracking-tight ${selectedTable === t ? 'text-white' : 'text-gray-700 dark:text-gray-200'}`}>
+                {t.replace('sync_', '')}
+              </p>
             </button>
           ))}
         </div>
       </div>
-      
-      <div className="lg:col-span-3 min-h-[700px]">
-        <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl shadow-slate-200/50 dark:shadow-none h-full">
-           {selectedTable ? (
-             <div className="flex flex-col h-full">
-               <div className="p-8 border-b border-slate-50 dark:border-slate-800/50 flex justify-between items-end">
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">{selectedTable}</h3>
-                    <div className="flex gap-3">
-                       <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1 rounded-full border border-indigo-100/50 dark:border-indigo-800/50">
-                         {data.length} Enregistrements
-                       </span>
-                    </div>
+
+      {/* Table Data View */}
+      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-gray-900/20">
+         {selectedTable ? (
+           <>
+             {/* View Header */}
+             <div className="p-8 border-b border-gray-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 flex justify-between items-center sticky top-0 z-10">
+                <div>
+                  <h3 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tighter flex items-center gap-3 italic">
+                    <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
+                    {selectedTable}
+                  </h3>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{dbType === 'entities' ? 'Base Entités' : 'Base Système'}</span>
+                    <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{totalCount} enregistrements</span>
                   </div>
-                  <button onClick={() => fetchTableData(selectedTable)} className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 rounded-2xl transition-all">
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                  </button>
-               </div>
-               <div className="flex-1 overflow-auto">
-                 {loading ? (
-                   <div className="h-full flex items-center justify-center p-20 opacity-20">
-                     <div className="h-8 w-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                </div>
+                <div className="flex gap-4">
+                   <div className="bg-gray-100 dark:bg-gray-800 px-4 py-2 rounded-xl text-[10px] font-black text-gray-500 uppercase tracking-widest border border-gray-200 dark:border-gray-700">
+                      Affichage : {data.length} lignes
                    </div>
-                 ) : (
-                   <table className="w-full text-left border-collapse">
-                     <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur-md z-10">
-                       <tr className="border-b border-slate-100 dark:border-slate-800">
-                         {Object.keys(data[0] || {}).map(k => (
-                           <th key={k} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">{k}</th>
-                         ))}
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                       {data.map((row, i) => (
-                         <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                           {Object.values(row).map((v: any, j) => (
-                             <td key={j} className="px-6 py-4 text-[11px] font-medium text-slate-600 dark:text-slate-400 truncate max-w-[200px]">
-                               {String(v)}
-                             </td>
-                           ))}
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 )}
-               </div>
+                </div>
              </div>
-           ) : (
-             <div className="h-full flex flex-col items-center justify-center text-center p-20 space-y-6 opacity-30 grayscale pointer-events-none">
-               <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-[32px] flex items-center justify-center">
-                 <Database className="w-10 h-10 text-slate-300" />
-               </div>
-               <div>
-                  <h4 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Aucune table sélectionnée</h4>
-                  <p className="text-sm font-medium text-slate-400">Parcourez le schéma de la base système sur la gauche</p>
-               </div>
+
+             {/* Spreadsheet-like Grid */}
+             <div className="flex-1 overflow-auto bg-gray-50/30 dark:bg-gray-900/10 custom-scrollbar">
+                <div className="min-w-full inline-block align-middle">
+                  <div className="overflow-hidden border-b border-gray-100 dark:border-gray-800">
+                    <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-800 border-separate border-spacing-0">
+                      <thead className="bg-gray-50 dark:bg-gray-800/80 sticky top-0 z-10">
+                        <tr>
+                          {Object.keys(data[0] || {}).map(k => (
+                            <th key={k} className="px-6 py-4 text-left text-[9px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 dark:border-gray-700 whitespace-nowrap bg-white/90 dark:bg-gray-800/90 backdrop-blur">
+                              {k}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-transparent divide-y divide-gray-50 dark:divide-gray-800">
+                        {data.map((row, i) => (
+                          <tr key={i} className="group hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors">
+                            {Object.values(row).map((v: any, j) => (
+                              <td key={j} className="px-6 py-4 text-[10px] font-medium text-gray-600 dark:text-gray-400 border-b border-gray-50 dark:border-gray-800 truncate max-w-[200px]" title={String(v)}>
+                                {String(v)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Performance Indexes Section */}
+                {indexes.length > 0 && (
+                   <div className="p-8 space-y-6">
+                      <div className="flex items-center gap-4">
+                        <span className="h-[2px] w-8 bg-amber-400"></span>
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Optimisation & Index ({indexes.length})</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {indexes.map(idx => (
+                          <div key={idx.name} className="p-6 bg-white dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-3xl shadow-sm hover:shadow-xl transition-all">
+                            <div className="flex items-center justify-between mb-4">
+                               <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tight">{idx.name}</div>
+                               <span className="text-[8px] font-black text-amber-500 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-tighter">Active Index</span>
+                            </div>
+                            <div className="bg-gray-900 dark:bg-black/40 p-4 rounded-xl border border-gray-800">
+                              <code className="text-[9px] text-emerald-400 font-mono italic leading-relaxed break-all block">
+                                {idx.sql}
+                              </code>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                )}
              </div>
-           )}
-        </div>
+           </>
+         ) : (
+           <div className="flex-1 flex flex-col items-center justify-center p-20 text-center space-y-8 animate-fade-in opacity-50 grayscale hover:grayscale-0 transition-all">
+             <div className="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center text-4xl shadow-inner border border-white/20">
+               🗄️
+             </div>
+             <div>
+               <h3 className="text-xl font-black uppercase tracking-widest text-gray-900 dark:text-white">Sélectionnez une table</h3>
+               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mt-2 italic">Parcourez les structures de données en temps réel</p>
+             </div>
+           </div>
+         )}
       </div>
     </div>
   );
 }
 
 // --------------------------------------------------------------------------------
-// 2. ODATA CONFIG TAB (Merged from /connect)
+// 2. USERS TAB (Redesigned with Premium Cards)
 // --------------------------------------------------------------------------------
-function ODataConfigTab() {
-  const [baseUrl, setBaseUrl] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [testSuccess, setTestSuccess] = useState<boolean | null>(null);
-  const [errorMessage, setErrorMessage] = useState('');
+function UsersTab() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newUser, setNewUser] = useState({ email: '', password: '', role: 'USER' });
 
-  useEffect(() => {
-    fetch('/api/config/odata').then(res => res.json()).then(data => {
-      setBaseUrl(data.baseUrl || '');
-      setUsername(data.username || '');
-      setPassword(data.password || '');
-    });
-  }, []);
+  useEffect(() => { fetchUsers(); }, []);
 
-  const handleTest = async () => {
-    setLoading(true);
-    setTestSuccess(null);
-    setErrorMessage('');
+  const fetchUsers = async () => {
     try {
-      const client = new ODataClient({ baseUrl, username, password });
-      await client.getMetadata();
-      setTestSuccess(true);
-    } catch (e: any) {
-      setTestSuccess(false);
-      setErrorMessage(e.message);
-    } finally { setLoading(false); }
-  };
-
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/config/odata', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ baseUrl, username, password })
-      });
-      if (res.ok) alert('Configuration enregistrée');
-      else alert('Erreur lors de la sauvegarde');
-    } catch (e) { alert('Erreur réseau'); }
+      const res = await fetch('/api/auth/users');
+      const data = await res.json();
+      setUsers(data);
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
 
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/auth/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      });
+      if (res.ok) {
+        setShowAdd(false);
+        setNewUser({ email: '', password: '', role: 'USER' });
+        fetchUsers();
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDelete = async (id: number, email: string) => {
+    if (!confirm(`Supprimer l'utilisateur ${email} ?`)) return;
+    try {
+      await fetch(`/api/auth/users`, { 
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      fetchUsers();
+    } catch (e) { console.error(e); }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 p-10 md:p-14 shadow-2xl space-y-10">
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-2xl">
-              <Server className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black uppercase tracking-tight">Configuration de la Passerelle</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Liaison temps réel avec Elise</p>
-            </div>
+    <div className="p-10 space-y-10 min-h-[750px] flex flex-col">
+       <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Gestion des Accès</h2>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Contrôle des privilèges et comptes utilisateurs</p>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-8">
-          <div className="space-y-3">
-             <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Endpoint URL OData</label>
-             <input 
-              value={baseUrl}
-              onChange={e => setBaseUrl(e.target.value)}
-              className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
-              placeholder="https://server/odata/"
-             />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Identifiant</label>
-               <input 
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
-               />
-            </div>
-            <div className="space-y-3">
-               <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Clé d'API / Passwort</label>
-               <input 
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-6 py-5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-3xl text-sm font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-inner"
-               />
-            </div>
-          </div>
-        </div>
-
-        {testSuccess !== null && (
-          <div className={`p-6 rounded-3xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-500 ${testSuccess ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 border border-emerald-100/50' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 border border-rose-100/50'}`}>
-            {testSuccess ? <CheckCircle2 className="w-6 h-6 shrink-0" /> : <AlertCircle className="w-6 h-6 shrink-0" />}
-            <div>
-              <h4 className="text-sm font-black uppercase tracking-tight">{testSuccess ? 'Connexion Validée' : 'Échec de Connexion'}</h4>
-              <p className="text-xs font-medium opacity-80 mt-1">{testSuccess ? 'La passerelle répond correctement aux requêtes OData.' : errorMessage}</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col sm:flex-row gap-4 pt-6">
           <button 
-            disabled={loading}
-            onClick={handleTest}
-            className="flex-1 py-5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white font-black rounded-3xl uppercase text-[11px] tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+            onClick={() => setShowAdd(true)}
+            className="group flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-2xl shadow-blue-500/20 active:scale-95"
           >
-            {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-            Démarrer un Test
+            <span className="text-lg transition-transform group-hover:rotate-90">+</span>
+            Nouveau Utilisateur
           </button>
-          <button 
-            disabled={loading}
-            onClick={handleSave}
-            className="flex-1 py-5 bg-indigo-600 text-white font-black rounded-3xl uppercase text-[11px] tracking-widest shadow-2xl shadow-indigo-500/40 hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-          >
-            <Save className="w-4 h-4" />
-            Enregistrer les Paramètres
-          </button>
-        </div>
-      </div>
+       </div>
+
+       {showAdd && (
+         <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl p-8 rounded-[2.5rem] border border-blue-100 dark:border-blue-900 shadow-2xl animate-in slide-in-from-top-4 duration-500">
+           <form onSubmit={handleAddUser} className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Email / Identifiant</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: admin@ivry.fr"
+                  value={newUser.email}
+                  onChange={e => setNewUser({...newUser, email: e.target.value})}
+                  className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 p-4 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Mot de passe</label>
+                <input 
+                  type="password"
+                  value={newUser.password}
+                  onChange={e => setNewUser({...newUser, password: e.target.value})}
+                  className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 p-4 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-bold"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Rôle Système</label>
+                <select 
+                  value={newUser.role}
+                  onChange={e => setNewUser({...newUser, role: e.target.value})}
+                  className="w-full bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 p-4 rounded-2xl text-xs outline-none focus:ring-2 focus:ring-blue-500 transition-all font-black uppercase tracking-widest"
+                >
+                  <option value="USER">Utilisateur Standard</option>
+                  <option value="ADMIN">Administrateur</option>
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <button type="submit" className="flex-1 bg-gray-900 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">Créer</button>
+                <button type="button" onClick={() => setShowAdd(false)} className="px-6 bg-gray-100 text-gray-400 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-50 hover:text-red-500 transition-colors">Annuler</button>
+              </div>
+           </form>
+         </div>
+       )}
+
+       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pr-2 custom-scrollbar pb-10">
+          {users.map(u => (
+            <div key={u.id} className="group relative bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 p-6 rounded-[2.5rem] hover:shadow-2xl hover:shadow-indigo-500/10 transition-all hover:-translate-y-1">
+               <div className="flex items-start justify-between mb-6">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black text-white shadow-xl ${u.role === 'ADMIN' ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gradient-to-br from-blue-400 to-indigo-500'}`}>
+                    {(u.email || u.username || '??').substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                     <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${u.role === 'ADMIN' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                        {u.role}
+                     </span>
+                  </div>
+               </div>
+
+               <div className="space-y-4">
+                  <div>
+                    <h4 className="text-lg font-black text-gray-900 dark:text-white tracking-tight truncate pr-4">{u.email || u.username}</h4>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 italic">Compte Actif</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-50 dark:border-gray-800 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                     <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>
+                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">En ligne</span>
+                     </div>
+                     <button 
+                       onClick={() => handleDelete(u.id, u.email || u.username)}
+                       className="p-3 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl transition-all"
+                       title="Révoquer l'accès"
+                     >
+                        🗑️
+                     </button>
+                  </div>
+               </div>
+            </div>
+          ))}
+       </div>
     </div>
   );
 }
 
 // --------------------------------------------------------------------------------
-// 3. AUDIT LOGS TAB
+// 3. CONFIG TAB (Premium Redesign)
+// --------------------------------------------------------------------------------
+function ConfigTab() {
+  const [activeSubTab, setActiveSubTab] = useState<'connexion' | 'logs'>('connexion');
+  const [baseUrl, setBaseUrl] = useState('https://ville-ivry94.illico.city/AppBI/odata/');
+  const [username, setUsername] = useState('User_StatBI');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [testSuccess, setTestSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
+  const [logs, setLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/config/odata')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.baseUrl) {
+          setBaseUrl(data.baseUrl);
+          setUsername(data.username || '');
+        }
+      })
+      .catch(e => console.error("Error loading config", e));
+  }, []);
+
+  useEffect(() => {
+    if (activeSubTab === 'logs') fetchLogs();
+  }, [activeSubTab]);
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch('/api/sync-logs');
+      const data = await res.json();
+      setLogs(data);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleTest = async () => {
+    setError(''); setTestSuccess(false); setTestLoading(true);
+    try {
+      const client = new ODataClient({
+        baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+        username,
+        password
+      });
+      await client.getMetadata();
+      setTestSuccess(true);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    const config: ODataConfig = {
+      baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+      username,
+      password
+    };
+    try {
+      setLoading(true);
+      const res = await fetch('/api/config/odata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      if (!res.ok) throw new Error('Erreur de sauvegarde');
+      alert('Configuration enregistrée');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="p-10 space-y-10 min-h-[750px] flex flex-col">
+       <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Connexion Elise</h2>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Passerelle de synchronisation OData</p>
+          </div>
+          <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
+            <button 
+              onClick={() => setActiveSubTab('connexion')}
+              className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeSubTab === 'connexion' ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
+            >Paramètres</button>
+            <button 
+              onClick={() => setActiveSubTab('logs')}
+              className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeSubTab === 'logs' ? 'bg-white dark:bg-gray-900 text-blue-600 shadow-xl' : 'text-gray-400 hover:text-gray-600'}`}
+            >Journal</button>
+          </div>
+       </div>
+
+       {activeSubTab === 'connexion' ? (
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="space-y-8">
+               <div className="bg-white dark:bg-gray-800/40 p-10 rounded-[3rem] border border-gray-100 dark:border-gray-700 space-y-8 shadow-inner">
+                  <div className="space-y-3">
+                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 block">Point de terminaison Elise OData</label>
+                     <div className="relative group">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl grayscale group-focus-within:grayscale-0 transition-all">🔗</span>
+                        <input 
+                          type="url" 
+                          value={baseUrl} 
+                          onChange={e => setBaseUrl(e.target.value)} 
+                          className="w-full bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-700 p-5 pl-14 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-bold" 
+                          placeholder="https://..."
+                        />
+                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-8">
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 block">Identifiant</label>
+                        <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-700 p-5 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-bold" />
+                     </div>
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 block">Mot de passe</label>
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-700 p-5 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-bold" />
+                     </div>
+                  </div>
+               </div>
+
+               <div className="flex gap-4">
+                  <button onClick={handleTest} disabled={testLoading} className="flex-1 py-6 bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest rounded-[2rem] shadow-2xl transition-all hover:bg-black active:scale-95 disabled:opacity-50">
+                     {testLoading ? 'Analyse réseau...' : '🧪 Tester la Connexion'}
+                  </button>
+                  <button onClick={handleSave} disabled={loading} className="flex-1 py-6 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-[2rem] shadow-2xl shadow-blue-500/40 transition-all hover:bg-blue-700 active:scale-95 border-b-4 border-blue-800">
+                     {loading ? 'Traitement...' : '💾 Sauvegarder'}
+                  </button>
+               </div>
+            </div>
+
+            <div className="space-y-8">
+               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2 flex items-center gap-3">
+                  <span className="w-1.5 h-4 bg-blue-500 rounded-full"></span>
+                  Rapport de Synchronisation
+               </h3>
+               {error && (
+                 <div className="p-10 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900 text-red-600 rounded-[3rem] space-y-4 animate-in fade-in slide-in-from-right-4 duration-500 shadow-xl shadow-red-500/5">
+                    <div className="flex items-center gap-3">
+                       <span className="text-3xl">⚠️</span>
+                       <h4 className="text-xs font-black uppercase tracking-widest">Échec de Liaison</h4>
+                    </div>
+                    <p className="text-[10px] font-bold italic leading-relaxed opacity-80">{error}</p>
+                 </div>
+               )}
+               {testSuccess && (
+                 <div className="p-10 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900 text-emerald-600 rounded-[3rem] space-y-4 animate-in zoom-in-95 duration-500 shadow-2xl shadow-emerald-500/10">
+                    <div className="flex items-center gap-4">
+                       <div className="relative">
+                          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs animate-ping absolute"></div>
+                          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs relative shadow-lg">✅</div>
+                       </div>
+                       <div>
+                          <h4 className="text-xs font-black uppercase tracking-widest">Canal Sécurisé</h4>
+                          <p className="text-[9px] font-bold opacity-70">Liaison opérationnelle</p>
+                       </div>
+                    </div>
+                    <p className="text-[10px] font-bold leading-relaxed border-t border-emerald-100 dark:border-emerald-900 pt-4 mt-4">
+                      Les métadonnées Elise sont accessibles. Vous pouvez synchroniser les documents maintenant.
+                    </p>
+                 </div>
+               )}
+               {!error && !testSuccess && (
+                 <div className="h-80 border-4 border-dashed border-gray-100 dark:border-gray-800 rounded-[4rem] flex flex-col items-center justify-center text-center p-10 space-y-6 opacity-40 transition-opacity hover:opacity-60 grayscale hover:grayscale-0">
+                    <div className="text-5xl">⚡</div>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-relaxed">Prêt pour diagnostic.<br/>Veuillez initier un test de flux.</p>
+                 </div>
+               )}
+            </div>
+         </div>
+       ) : (
+         <div className="bg-white/50 dark:bg-gray-900/30 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden flex-1 shadow-inner flex flex-col">
+            <div className="overflow-x-auto custom-scrollbar flex-1">
+              <table className="min-w-full text-xs">
+                <thead className="bg-gray-50/80 dark:bg-gray-800 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-10 py-8 text-left">Date & Heure</th>
+                    <th className="px-10 py-8 text-left">Objets Traités</th>
+                    <th className="px-10 py-8 text-left">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {logs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-blue-50/30 transition-all group">
+                      <td className="px-10 py-6">
+                          <div className="flex items-center gap-4">
+                            <span className="w-2 h-2 bg-blue-400 rounded-full group-hover:scale-150 transition-transform shadow-lg shadow-blue-400/20"></span>
+                            <span className="font-bold text-gray-700 dark:text-gray-300">{new Date(log.startTime).toLocaleString()}</span>
+                          </div>
+                      </td>
+                      <td className="px-10 py-6 text-gray-500 font-black tracking-widest italic">{log.docsCount} <span className="text-[9px] text-gray-300">DOCS</span> / {log.tasksCount} <span className="text-[9px] text-gray-300">TÂCHES</span></td>
+                      <td className="px-10 py-6">
+                          <span className={`px-6 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-xl ${
+                            log.status === 'SUCCESS' ? 'bg-emerald-500 text-white shadow-emerald-500/20' : 'bg-red-500 text-white shadow-red-500/20'
+                          }`}>
+                            {log.status === 'SUCCESS' ? 'Succès Total' : 'Échec Système'}
+                          </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {logs.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-10 py-32 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-20 text-xs">
+                          Aucun journal disponible pour le moment
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+         </div>
+       )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------------
+// 4. AUDIT LOGS TAB (Merged from Main)
 // --------------------------------------------------------------------------------
 function AuditLogsTab() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -375,223 +662,68 @@ function AuditLogsTab() {
   useEffect(() => { fetchLogs(); }, []);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-2xl">
-      <div className="p-8 border-b border-slate-50 dark:border-slate-800/50 flex justify-between items-center">
+    <div className="p-10 space-y-10 min-h-[750px] flex flex-col">
+      <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-black uppercase tracking-tight">Audit des Interrogations API</h2>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Supervision des requêtes BI Gateway</p>
+          <h2 className="text-3xl font-black text-gray-900 dark:text-white uppercase tracking-tighter italic">Audit API</h2>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Supervision des requêtes BI Gateway</p>
         </div>
-        <button onClick={fetchLogs} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-2xl transition-all">
-          <RefreshCw className={`w-4 h-4 text-slate-400 ${loading ? 'animate-spin' : ''}`} />
+        <button onClick={fetchLogs} className="p-4 bg-gray-100 dark:bg-gray-800 rounded-2xl transition-all">
+          <RefreshCw className={`w-5 h-5 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <div className="overflow-x-auto min-h-[400px]">
-        {loading && logs.length === 0 ? (
-          <div className="p-20 flex justify-center opacity-20">
-            <RefreshCw className="w-8 h-8 animate-spin" />
-          </div>
-        ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                <th className="px-8 py-5">Horodatage</th>
-                <th className="px-8 py-5">Endpoint</th>
-                <th className="px-8 py-5">Durée</th>
-                <th className="px-8 py-5">Utilisateur</th>
-                <th className="px-8 py-5">État</th>
+      <div className="bg-white/50 dark:bg-gray-900/30 rounded-[3.5rem] border border-gray-100 dark:border-gray-700 overflow-hidden flex-1 shadow-inner flex flex-col">
+        <div className="overflow-x-auto custom-scrollbar flex-1">
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-50/80 dark:bg-gray-800 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 sticky top-0 z-10">
+              <tr>
+                <th className="px-10 py-8 text-left">Horodatage</th>
+                <th className="px-10 py-8 text-left">Endpoint</th>
+                <th className="px-10 py-8 text-left">Durée</th>
+                <th className="px-10 py-8 text-left">Utilisateur</th>
+                <th className="px-10 py-8 text-left">État</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
               {Array.isArray(logs) && logs.map((log) => (
-                <tr key={log.id} className="hover:bg-indigo-50/20 dark:hover:bg-indigo-900/10 transition-colors">
-                  <td className="px-8 py-5">
+                <tr key={log.id} className="hover:bg-blue-50/30 transition-all group">
+                  <td className="px-10 py-6">
                     <div className="flex flex-col">
-                      <span className="text-[11px] font-black text-slate-900 dark:text-white">{new Date(log.timestamp).toLocaleDateString()}</span>
-                      <span className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{new Date(log.timestamp).toLocaleDateString()}</span>
+                      <span className="text-[10px] text-gray-400">{new Date(log.timestamp).toLocaleTimeString()}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-10 py-6">
                     <div className="flex items-center gap-2">
-                       <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-black text-slate-500 uppercase">{log.method}</span>
-                       <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{log.endpoint}</span>
+                       <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded-lg text-[9px] font-black text-gray-500 uppercase">{log.method}</span>
+                       <span className="text-[11px] font-bold text-gray-700 dark:text-gray-300">{log.endpoint}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-xs font-bold text-slate-500">
+                  <td className="px-10 py-6 text-xs font-bold text-gray-500">
                     {log.duration}ms
                   </td>
-                  <td className="px-8 py-5 text-[10px] font-black text-indigo-600 uppercase tracking-tight">
+                  <td className="px-10 py-6 text-[9px] font-black text-blue-600 uppercase tracking-tight">
                     {log.userEmail || 'Anonyme'}
                   </td>
-                  <td className="px-8 py-5">
+                  <td className="px-10 py-6">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full ${log.status < 400 ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-rose-500 shadow-lg shadow-rose-500/50'}`}></div>
-                      <span className={`text-[10px] font-black uppercase tracking-widest ${log.status < 400 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <div className={`w-2 h-2 rounded-full ${log.status < 400 ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-red-500 shadow-lg shadow-red-500/50'}`}></div>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${log.status < 400 ? 'text-emerald-600' : 'text-red-600'}`}>
                         {log.status}
                       </span>
                     </div>
                   </td>
                 </tr>
               ))}
+              {logs.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={5} className="px-10 py-32 text-center text-gray-400 italic font-black uppercase tracking-widest opacity-20 text-xs">
+                      Aucune donnée d'audit disponible
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// --------------------------------------------------------------------------------
-// 4. IMPROVED USERS TAB
-// --------------------------------------------------------------------------------
-function UsersTab() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('USER');
-  const [loading, setLoading] = useState(false);
-
-  const fetchUsers = () => fetch('/api/auth/users').then(res => res.json()).then(setUsers);
-  useEffect(() => { fetchUsers(); }, []);
-
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
-    setLoading(true);
-    const method = editingUser ? 'PATCH' : 'POST';
-    const body = editingUser 
-      ? { id: editingUser.id, role, password: password || undefined }
-      : { email, password, role };
-
-    await fetch('/api/auth/users', { method, body: JSON.stringify(body) });
-    
-    setEmail(''); setPassword(''); setRole('USER'); setEditingUser(null);
-    await fetchUsers();
-    setLoading(false);
-  };
-
-  const handleEdit = (u: any) => {
-    setEditingUser(u);
-    setEmail(u.email);
-    setRole(u.role);
-    setPassword('');
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('Voulez-vous supprimer cet utilisateur ?')) return;
-    await fetch('/api/auth/users', { method: 'DELETE', body: JSON.stringify({ id }) });
-    fetchUsers();
-  };
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
-      <div className="xl:col-span-2">
-        <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 shadow-xl overflow-hidden">
-          <div className="p-8 border-b border-slate-50 dark:border-slate-800/50 flex justify-between items-center">
-            <h2 className="text-xl font-black uppercase tracking-tight">Utilisateurs Autorisés</h2>
-            <div className="px-3 py-1 bg-slate-50 dark:bg-slate-800 text-slate-400 text-[10px] font-black rounded-full uppercase tracking-widest leading-none flex items-center gap-2">
-               <ShieldCheck className="w-3 h-3 text-indigo-500" />
-               {users.length} Comptes
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 dark:border-slate-800/50">
-                  <th className="px-8 py-5 italic">Identité</th>
-                  <th className="px-8 py-5 italic">Privilèges</th>
-                  <th className="px-8 py-5 italic text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {users.map((u: any) => (
-                  <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-indigo-600 font-black text-xl">
-                          {u.email[0].toUpperCase()}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[12px] font-black text-slate-900 dark:text-white">{u.email}</span>
-                          <span className="text-[10px] text-slate-400 font-medium tracking-tight">Créé le {new Date(u.createdAt).toLocaleDateString()}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5">
-                       <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${u.role === 'ADMIN' ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200/50 dark:border-slate-700'}`}>
-                         {u.role}
-                       </span>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                       <div className="flex gap-2 justify-end">
-                          <button onClick={() => handleEdit(u)} className="p-2.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-xl transition-all"><Edit2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDelete(u.id)} className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
-                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <div className="xl:col-span-1">
-        <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-100 dark:border-slate-800 p-10 shadow-xl space-y-8 sticky top-8">
-          <div className="pb-6 border-b border-slate-50 dark:border-slate-800/50">
-            <h3 className="text-lg font-black uppercase tracking-tight flex items-center gap-3">
-              <div className="w-2 h-8 bg-indigo-600 rounded-full"></div>
-              {editingUser ? 'Édition Profil' : 'Nouvel Accès'}
-            </h3>
-          </div>
-          <form onSubmit={handleSubmit} className="space-y-6">
-             <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Adresse Email</label>
-                  <input 
-                    value={email} 
-                    onChange={e => setEmail(e.target.value)} 
-                    placeholder="ex: admin@ivry.fr" 
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-2xl text-xs font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-50 transition-all font-mono" 
-                    required 
-                    disabled={!!editingUser}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Secret d'accès</label>
-                  <input 
-                    type="password" 
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    placeholder={editingUser ? '--- Inchangé ---' : 'Mot de passe sécurisé'} 
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-2xl text-xs font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" 
-                    required={!editingUser} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rôle Système</label>
-                  <select value={role} onChange={e => setRole(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 p-4 rounded-2xl text-xs font-black outline-none cursor-pointer hover:bg-white dark:hover:bg-slate-700 transition-all uppercase tracking-tight">
-                     <option value="USER">👤 Utilisateur (Standard)</option>
-                     <option value="ADMIN">🛡️ Administrateur (Privilégié)</option>
-                  </select>
-                </div>
-             </div>
-             <div className="flex gap-3 pt-4">
-               <button disabled={loading} className="flex-1 bg-indigo-600 text-white font-black py-5 rounded-3xl shadow-2xl shadow-indigo-500/30 transition-all active:scale-95 uppercase text-[11px] tracking-widest hover:bg-indigo-700 flex items-center justify-center gap-2">
-                 {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                 {editingUser ? 'Appliquer' : 'Confirmer'}
-               </button>
-               {editingUser && (
-                 <button type="button" onClick={() => {setEditingUser(null); setEmail(''); setRole('USER');}} className="px-8 bg-slate-100 dark:bg-slate-800 text-slate-400 font-black rounded-3xl text-[11px] uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
-                   Annuler
-                 </button>
-               )}
-             </div>
-          </form>
-          <div className="p-5 bg-indigo-50 dark:bg-indigo-900/10 rounded-[32px] border border-indigo-100/50 dark:border-indigo-800/50">
-            <p className="text-[10px] text-indigo-700 dark:text-indigo-400 font-bold leading-relaxed italic">
-              * Les changements de permissions prennent effet à la prochaine session de l'utilisateur.
-            </p>
-          </div>
         </div>
       </div>
     </div>

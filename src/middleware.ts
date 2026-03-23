@@ -11,7 +11,9 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/auth') || 
     pathname.startsWith('/api/users') || 
     pathname === '/api/health' || 
-    pathname.startsWith('/api/debug')
+    pathname.startsWith('/api/debug') ||
+    pathname.startsWith('/api/hierarchy') ||
+    pathname.startsWith('/api/stats')
   ) {
     return NextResponse.next();
   }

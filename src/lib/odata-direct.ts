@@ -8,6 +8,10 @@ let cachedTypes: any[] | null = null;
 let lastCacheUpdate: number = 0;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+const TASK_TYPE_ID = 114; 
+const DGS_ID = 269;
+const DGS_LABEL = "DGS - Direction Générale des Services";
+
 export async function getODataConfig() {
   try {
     const dbConfig = await (prismaSystem as any).AppConfig.findUnique({
@@ -23,7 +27,7 @@ export async function getODataConfig() {
   };
 }
 
-export async function fetchStatsByFilters(year: number, month?: string, filters?: any) {
+export async function fetchCabinetEvolution(year: number, month?: string, filters?: any) {
   const config = await getODataConfig();
   if (!config?.baseUrl) throw new Error('OData config missing');
 
@@ -40,7 +44,7 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
   }
 
   try {
-    const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,MediumId,TypeId,StateId,DirectionId`;
+    const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`;
     let docs = await client.requestAll<any>(query);
 
     if (filters?.status && filters.status !== 'all') {
@@ -48,68 +52,77 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
       docs = docs.filter((d: any) => Number(d.StateId) === statusId);
     }
 
-    if (filters && (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
-      const taskStart = filter.match(/ge ([^ ]+)/)?.[1] || `${year}-01-01T00:00:00Z`;
-      const docEnd = filter.match(/lt ([^ ]+)/)?.[1] || `${year + 1}-01-01T00:00:00Z`;
-      const taskEndDate = new Date(docEnd);
-      taskEndDate.setDate(taskEndDate.getDate() + 15);
-      const taskEnd = taskEndDate.toISOString();
+    // --- FILTRE ENTRANTS UNIQUEMENT ---
+    docs = docs.filter((d: any) => d.DocumentIdentifier?.startsWith('ENT'));
 
-      const taskFilter = `RequestedDate ge ${taskStart} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
-      
-      const [taskDocsRaw, allPathsRaw] = await Promise.all([
-        client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber desc`),
-        (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) 
-          ? Promise.resolve(cachedPaths) 
-          : client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`)
-      ]);
+    // --- KPI MUNI (Itération 3) ---
+    const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-02-01T00:00:00Z and TaskProcessingTypeId eq 114`;
+    const [allTasks, allPathsRaw, allTypesRaw, allStatusesRaw] = await Promise.all([
+      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
+      client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey`),
+      client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr"),
+      client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
+    ]);
 
-      const yearDocIds = new Set(docs.map((d: any) => d.Id));
-      const taskDocs = taskDocsRaw.filter((t: any) => yearDocIds.has(t.DocumentId));
+    const pm = new Map();
+    const pmFull = new Map();
+    const EXCLUDED_NAME = "ABBAS Isabelle";
+    
+    allPathsRaw.forEach((p: any) => {
+      const isExcluded = ["Level2", "Level3", "Level4", "Level5", "Level6"].some(k => 
+        (p[k] || '').trim().toUpperCase().includes(EXCLUDED_NAME.toUpperCase())
+      );
+      if (isExcluded) return;
 
-      if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-        cachedPaths = allPathsRaw;
-        lastCacheUpdate = Date.now();
-      }
+      pm.set(p.Id, p.Level2?.trim());
+      pmFull.set(p.Id, p);
+    });
 
-      const pathMap = new Map();
-      allPathsRaw.forEach((p: any) => {
-        if (!pathMap.has(p.Id)) {
-          pathMap.set(p.Id, {
-            pole: p.Level2?.trim(),
-            dga: p.Level3?.trim(),
-            dir: p.Level4?.trim(),
-            service: p.Level5?.trim()
-          });
-        }
-      });
+    const d2t = new Map<number, number[]>();
+    allTasks.forEach((t: any) => {
+      if (!d2t.has(t.DocumentId)) d2t.set(t.DocumentId, []);
+      d2t.get(t.DocumentId)!.push(t.AssignedToStructureElementId);
+    });
 
-      const docToPaths = new Map<number, any[]>();
-      taskDocs.forEach((t: any) => {
-        const path = pathMap.get(t.AssignedToStructureElementId);
-        if (path) {
-           if (!docToPaths.has(t.DocumentId)) docToPaths.set(t.DocumentId, []);
-           docToPaths.get(t.DocumentId)!.push(path);
-        }
-      });
+    const muniDocIds = new Set<number>();
+    docs.forEach((doc: any) => {
+      const tasks = d2t.get(doc.Id) || [];
+      const hasDGS = tasks.includes(DGS_ID);
+      const hasSubDGS = tasks.some(id => id !== DGS_ID && pm.get(id) === DGS_LABEL);
+      if (hasDGS && hasSubDGS) muniDocIds.add(doc.Id);
+    });
 
-      docs = docs.filter((d: any) => {
-        const paths = docToPaths.get(d.Id);
-        if (!paths || paths.length === 0) return false; 
-        
-        return paths.some(path => {
-          if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
-          if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
-          if (filters.dir !== 'all' && path.dir !== filters.dir) return false;
-          if (filters.service !== 'all') {
-            if (filters.service === '(Affectations directes)') {
-              if (path.service) return false;
-            } else if (path.service !== filters.service) return false;
+    // --- FILTRE HIERARCHIQUE & REGLES ---
+    const poleFilter = filters?.pole && filters.pole !== 'all' ? filters.pole : null;
+    const dgaFilter = filters?.dga && filters.dga !== 'all' ? filters.dga : null;
+    const dirFilter = filters?.dir && filters.dir !== 'all' ? filters.dir : null;
+    const serviceFilter = filters?.service && filters.service !== 'all' ? filters.service : null;
+
+    if (poleFilter || dgaFilter || dirFilter || serviceFilter) {
+      docs = docs.filter(doc => {
+        const tasks = d2t.get(doc.Id) || [];
+        const paths = tasks.map(id => pmFull.get(id)).filter(Boolean);
+        return paths.some(p => {
+          if (poleFilter && p.Level2?.trim() !== poleFilter) return false;
+          if (dgaFilter && p.Level3?.trim() !== dgaFilter) return false;
+          if (dirFilter && p.Level4?.trim() !== dirFilter) return false;
+          if (serviceFilter) {
+             if (serviceFilter === '(Affectations directes)') {
+                if ((p.Level5 || '').trim()) return false;
+             } else if (p.Level5?.trim() !== serviceFilter) return false;
           }
           return true;
         });
       });
     }
+
+    const assignedDocs = docs.filter(doc => d2t.has(doc.Id));
+    const unassignedDocs = docs.filter(doc => !d2t.has(doc.Id));
+    const muniDocs = docs.filter(d => muniDocIds.has(d.Id));
+
+    const totalDocs = docs.length;
+    const totalMuni = muniDocs.length;
+    const totalUnassigned = unassignedDocs.length;
 
     const isMonthly = !month || month === 'all';
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -122,6 +135,19 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
       chartData = Array(daysInMonth).fill(0).map((_, i) => ({ name: (i + 1).toString().padStart(2, '0'), courriers: 0, courriels: 0 }));
     }
 
+    let paperCount = 0;
+    let mailCount = 0;
+    let noResponseCount = 0;
+    let totalClosed = 0;
+    let delaysTotal = 0;
+    
+    let slaClosedWithin = 0;
+    let slaClosedExceeded = 0;
+    let slaActiveWithin = 0;
+    let slaActiveExceeded = 0;
+
+    const byNature: Record<string, number> = {};
+
     docs.forEach((doc: any) => {
       const date = new Date(doc.CreatedDate);
       const isEmail = Number(doc.MediumId) === 88;
@@ -130,265 +156,131 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         if (isEmail) chartData[index].courriels++;
         else chartData[index].courriers++;
       }
-    });
 
-    return {
-      totalDocs: docs.length,
-      totalTasks: 0,
-      monthlyEvolution: chartData
-    };
-  } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchStatsByFilters:`, err.message);
-    throw err;
-  }
-}
+      if (isEmail) mailCount++;
+      else paperCount++;
 
-export async function fetchDirectHierarchy(year: number, filters?: { pole: string, dga: string, dir: string, month?: string, status?: string }) {
-  try {
-    const config = await getODataConfig();
-    const client = new ODataClient(config);
+      if (!doc.ClosedDate || doc.ClosedDate === 'null') noResponseCount++;
 
-    const isMonthly = !filters?.month || filters.month === 'all';
-    let startDate = `${year}-01-01T00:00:00Z`;
-    let endDate = `${year + 1}-01-01T00:00:00Z`;
-    if (!isMonthly) {
-      const m = parseInt(filters!.month || '1');
-      startDate = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
-      const nextM = m === 12 ? 1 : m + 1;
-      const nextY = m === 12 ? year + 1 : year;
-      endDate = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-    }
+      const typeLabel = allTypesRaw.find((t: any) => t.Id === doc.TypeId)?.LabelFrFr || 'Autres';
+      byNature[typeLabel] = (byNature[typeLabel] || 0) + 1;
 
-    const taskEnd = new Date(year + 1, 5, 1).toISOString(); 
-    const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
-    
-    const taskDocs = await client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(tasksFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber`);
+      const isClosed = doc.ClosedDate && doc.ClosedDate !== 'null' && doc.ClosedDate !== '';
+      const created = new Date(doc.CreatedDate);
+      const end = isClosed ? new Date(doc.ClosedDate) : new Date();
+      const delayDays = Math.max(0, (end.getTime() - created.getTime()) / (1000 * 3600 * 24));
+      
+      const tasks = d2t.get(doc.Id) || [];
+      const matchingTasks = tasks.map(id => pmFull.get(id)).filter(Boolean);
+      const isDrh = matchingTasks.some(p => (p.Level4 || '').trim().toUpperCase().includes('RESSOURCES HUMAINES'));
+      const limit = isDrh ? 60 : 30;
+      const isWithinSla = delayDays <= limit;
 
-    const docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}${filters?.status && filters.status !== 'all' ? ` and StateId eq ${filters.status}` : ''}`;
-    const yearDocsBase = await client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,DirectionId`);
-    const yearDocIdsInPeriod = new Set(yearDocsBase.map((d: any) => d.Id));
-
-    const taskDocsFiltered = taskDocs.filter((t: any) => yearDocIdsInPeriod.has(t.DocumentId));
-    const activeDocIdsFromFilteredTasks = new Set<number>(taskDocsFiltered.map((t: any) => t.DocumentId));
-
-    const [statesRaw, allPathsRaw] = await Promise.all([
-      (cachedStatuses && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve({ value: cachedStatuses }) : client.request<any>('DimDocumentState?$select=Id,LabelFrFr'),
-      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey")
-    ]);
-
-    if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-      cachedPaths = allPathsRaw;
-      cachedStatuses = statesRaw.value || [];
-      lastCacheUpdate = Date.now();
-    }
-
-    const pathMap = new Map<number, any>(allPathsRaw.map((p: any) => [p.Id, {
-      pole: (p.Level2 || '').trim(),
-      dga: (p.Level3 || '').trim(),
-      dir: (p.Level4 || '').trim(),
-      service: (p.Level5 || '').trim(),
-      typeKey: (p.StructureElementTypeKey || '').toUpperCase()
-    }]));
-
-    const docToElements: Record<number, number[]> = {};
-    taskDocsFiltered.forEach((t: any) => {
-      if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = [];
-      docToElements[t.DocumentId].push(t.AssignedToStructureElementId);
-    });
-
-    const docPrimaryPath = new Map<number, any>();
-    activeDocIdsFromFilteredTasks.forEach((docId: number) => {
-      const elements = docToElements[docId] || [];
-      for (const elementId of elements) {
-        const p = pathMap.get(elementId);
-        if (p && p.dir) {
-          docPrimaryPath.set(docId, p);
-          break;
-        }
+      if (isClosed) {
+        totalClosed++;
+        delaysTotal += delayDays;
+        if (isWithinSla) slaClosedWithin++;
+        else slaClosedExceeded++;
+      } else {
+        if (isWithinSla) slaActiveWithin++;
+        else slaActiveExceeded++;
       }
     });
 
-    const getHierarchyWithCounts = (level: string, currentFilters?: any) => {
-      const map: Record<string, number> = {};
-      activeDocIdsFromFilteredTasks.forEach((docId: number) => {
-         const p = docPrimaryPath.get(docId);
-         if (!p) return;
-
-         let matches = true;
-         if (currentFilters) {
-            if (currentFilters.pole && currentFilters.pole !== 'all' && p.pole !== currentFilters.pole) matches = false;
-            if (currentFilters.dga && currentFilters.dga !== 'all' && p.dga !== currentFilters.dga) matches = false;
-            if (currentFilters.dir && currentFilters.dir !== 'all' && p.dir !== currentFilters.dir) matches = false;
-         }
-         if (!matches) return;
-
-         let name = "";
-         if (level === 'Level2') name = p.pole;
-         else if (level === 'Level3') name = p.dga;
-         else if (level === 'Level4') name = p.dir;
-         else if (level === 'Level5') {
-            if (!p.service) name = '(Affectations directes)';
-            else if (p.typeKey === 'USER' || (p.typeKey !== 'SERVICE' && p.service)) name = (p.service === p.dir) ? `${p.service} (Individuel)` : p.service;
-            else name = p.service;
-         }
-         if (!name && (level === 'Level3' || level === 'Level4')) name = '(Affectations directes)';
-         
-         if (name) map[name] = (map[name] || 0) + 1;
+    const assignmentsMap = new Map<string, any>();
+    docs.forEach((doc: any) => {
+      const taskElementIds = Array.from(d2t.get(doc.Id) || []);
+      const paths = taskElementIds.map(id => pmFull.get(id)).filter(Boolean);
+      const docDirections = new Map<string, { dga: string, services: Set<string> }>();
+      
+      paths.forEach(p => {
+        const dir = (p.Level4 || '').trim();
+        if (!dir) return;
+        if (!docDirections.has(dir)) docDirections.set(dir, { dga: p.Level3 || '', services: new Set() });
+        const svc = (p.Level5 || '').trim();
+        if (svc) docDirections.get(dir)!.services.add(svc);
       });
-      if (level === 'Level2' && (!currentFilters || (currentFilters.pole === 'all' && currentFilters.dga === 'all'))) {
-         const unassignedCount = Array.from(yearDocIdsInPeriod).filter(id => !docToElements[id]).length;
-         if (unassignedCount > 0) map["(Non affecté)"] = unassignedCount;
-      }
-      return Object.entries(map).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
-    };
+
+      const isClosed = doc.ClosedDate && doc.ClosedDate !== 'null' && doc.ClosedDate !== '';
+      docDirections.forEach((info, dir) => {
+        if (info.services.size === 0) info.services.add('(Affectations directes)');
+        info.services.forEach(svcName => {
+           const key = `${dir}|${info.dga}|${svcName}`;
+           if (!assignmentsMap.has(key)) assignmentsMap.set(key, { direction: dir, dga: info.dga, service: svcName, count: 0, activeCount: 0 });
+           const entry = assignmentsMap.get(key);
+           entry.count++;
+           if (!isClosed) entry.activeCount++;
+        });
+      });
+    });
 
     return {
-      poles: getHierarchyWithCounts('Level2'),
-      dgas: getHierarchyWithCounts('Level3', filters),
-      directions: getHierarchyWithCounts('Level4', filters),
-      services: getHierarchyWithCounts('Level5', filters),
-      statuses: (statesRaw.value || []).map((s: any) => ({ id: s.Id, name: s.LabelFrFr || s.Label }))
+      totalDocs,
+      totalMuni,
+      totalUnassigned,
+      avgDelay: totalClosed > 0 ? Math.round(delaysTotal / totalClosed) : 0,
+      paperCount,
+      mailCount,
+      noResponseCount,
+      monthlyEvolution: chartData,
+      byNature: Object.entries(byNature).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0, 10),
+      byDirection: Array.from(assignmentsMap.values()),
+      sla: {
+        closed: { within: slaClosedWithin, exceeded: slaClosedExceeded },
+        active: { within: slaActiveWithin, exceeded: slaActiveExceeded }
+      },
+      availableYears: [year - 1, year],
+      statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
     };
-  } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchDirectHierarchy:`, err.message);
-    throw err;
+
+  } catch (error) {
+    console.error('OData Fetch Error:', error);
+    throw error;
   }
 }
 
-export async function fetchCabinetEvolution(year: number, month?: string, filters?: any) {
-  try {
-    const config = await getODataConfig();
-    const client = new ODataClient(config);
+export async function fetchDirectHierarchy(year: number, filters?: any) {
+  const config = await getODataConfig();
+  const client = new ODataClient(config);
 
-    const isMonthly = !month || month === 'all';
-    let startDate = `${year}-01-01T00:00:00Z`;
-    let endDate = `${year + 1}-01-01T00:00:00Z`;
-    if (!isMonthly) {
-      const m = parseInt(month || '1');
-      startDate = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
-      const nextM = m === 12 ? 1 : m + 1;
-      const nextY = m === 12 ? year + 1 : year;
-      endDate = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
+  const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and TaskProcessingTypeId eq 114`;
+  const [allTasksRaw, allPathsRaw, allStatusesRaw] = await Promise.all([
+    client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
+    client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`),
+    client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
+  ]);
+
+  const pmFull = new Map();
+  allPathsRaw.forEach((p: any) => { pmFull.set(p.Id, p); });
+
+  const assignments: any[] = [];
+  const assignedDocIds = new Set(allTasksRaw.map(t => t.DocumentId));
+
+  allTasksRaw.forEach((t: any) => {
+    const p = pmFull.get(t.AssignedToStructureElementId);
+    if (p) {
+      assignments.push({
+        pole: p.Level2?.trim(),
+        dga: p.Level3?.trim(),
+        dir: p.Level4?.trim(),
+        service: p.Level5?.trim()
+      });
     }
+  });
 
-    const taskEnd = new Date(year + 1, 5, 1).toISOString(); 
-    const taskFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
+  const uniquePoles = Array.from(new Set(assignments.map(a => a.pole).filter(Boolean)));
+  const uniqueDgas = Array.from(new Set(assignments.filter(a => !filters.pole || filters.pole === 'all' || a.pole === filters.pole).map(a => a.dga).filter(Boolean)));
+  const uniqueDirs = Array.from(new Set(assignments.filter(a => !filters.dga || filters.dga === 'all' || a.dga === filters.dga).map(a => a.dir).filter(Boolean)));
+  const uniqueSvcs = Array.from(new Set(assignments.filter(a => !filters.dir || filters.dir === 'all' || a.dir === filters.dir).map(a => a.service).filter(Boolean)));
 
-    const [allPathsRaw, allTypesRaw, taskDocs] = await Promise.all([
-      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey"),
-      (cachedTypes && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedTypes) : client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr"),
-      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber`)
-    ]);
-
-    // Documents créés dans la période (Base de l'évolution et des affectations)
-    const docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}`;
-    const yearDocsBase = await client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`);
-    const yearDocIdsInPeriod = new Set(yearDocsBase.map((d: any) => d.Id));
-
-    if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-       cachedPaths = allPathsRaw; cachedTypes = allTypesRaw; lastCacheUpdate = Date.now();
-    }
-
-    const pathMap = new Map<number, any>(allPathsRaw.map((p: any) => [p.Id, {
-      isMuni: (p.Level2 || '').toUpperCase().includes('CABINET'),
-      pole: (p.Level2 || '').trim(), dga: (p.Level3 || '').trim(), dir: (p.Level4 || '').trim(), service: (p.Level5 || '').trim(),
-      typeKey: (p.StructureElementTypeKey || '').toUpperCase()
-    }]));
-
-    const typeMap = new Map<number, string>(allTypesRaw.map((t: any) => [t.Id, t.LabelFrFr]));
-    
-    // Filtrer les tâches pour ne garder QUE celles des documents créés cette année
-    const taskDocsFiltered = taskDocs.filter((t: any) => yearDocIdsInPeriod.has(t.DocumentId));
-    
-    const docToElements: Record<number, number[]> = {};
-    taskDocsFiltered.forEach((t: any) => {
-      if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = [];
-      docToElements[t.DocumentId].push(t.AssignedToStructureElementId);
-    });
-
-    const evolutionSize = isMonthly ? 12 : new Date(year, parseInt(month || '1'), 0).getDate();
-    const entrants = {
-      total: yearDocsBase.length, paperCount: 0, mailCount: 0, noResponseCount: 0, muniCount: 0, courantCount: 0, sharedCount: 0,
-      byMonth: Array(evolutionSize).fill(0).map(() => ({ courriers: 0, courriels: 0 })),
-      byNature: {} as Record<string, number>,
-      deadlines: { closed: { within30: 0, within60: 0, exceeded: 0 }, active: { within30: 0, within60: 0, exceeded: 0 } }
-    };
-
-    const assignmentsSet = new Map<string, any>();
-    let totalDelayDays = 0; let closedCount = 0;
-
-    yearDocsBase.forEach((doc: any) => {
-      const isCreatedDoc = true; 
-      const docDate = new Date(doc.CreatedDate);
-      const isEmail = Number(doc.MediumId) === 88;
-      const index = isMonthly ? docDate.getMonth() : docDate.getDate() - 1;
-
-      if (index >= 0 && index < evolutionSize) {
-         if (isEmail) { entrants.byMonth[index].courriels++; entrants.mailCount++; }
-         else { entrants.byMonth[index].courriers++; entrants.paperCount++; }
-         if (doc.StateId !== 45 && doc.StateId !== 46) entrants.noResponseCount++;
-         const nature = typeMap.get(doc.TypeId) || 'Autre';
-         entrants.byNature[nature] = (entrants.byNature[nature] || 0) + 1;
-      }
-
-      const elements = docToElements[doc.Id] || [];
-      const isUnclosed = doc.ClosedDate === null;
-      let isAccountedInHierarchy = false;
-
-      for (const elementId of elements) {
-         const p = pathMap.get(elementId);
-         if (!p || !p.dir) continue;
-         
-         if (!isAccountedInHierarchy) {
-            isAccountedInHierarchy = true;
-            let svc = p.service || '(Affectations directes)';
-            if (p.service && (p.typeKey === 'USER' || (p.typeKey !== 'SERVICE' && p.service))) {
-               svc = (p.service === p.dir) ? `${p.service} (Individuel)` : p.service;
-            }
-            const key = `${p.dir}|${svc}`;
-            if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: p.pole, direction: p.dir, dga: p.dga, service: svc, count: 0, unclosedCount: 0 });
-            assignmentsSet.get(key).count++;
-            if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
-         }
-      }
-
-      if (elements.length > 0 && !isAccountedInHierarchy && (!filters || filters.pole === 'all')) {
-         const key = "(Indéterminé)|(Indéterminé)";
-         if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: "(Indéterminé)", direction: "(Indéterminé)", dga: "(Indéterminé)", service: "(Indéterminé)", count: 0, unclosedCount: 0 });
-         assignmentsSet.get(key).count++; if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
-      }
-
-      if (elements.length === 0 && isCreatedDoc && (!filters || filters.pole === 'all')) {
-         const key = "(Non affecté)|(Non affecté)";
-         if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: "(Non affecté)", direction: "(Non affecté)", dga: "(Non affecté)", service: "(Non affecté)", count: 0, unclosedCount: 0 });
-         assignmentsSet.get(key).count++; if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
-      }
-
-      if (isCreatedDoc) {
-         let docIsMuni = false; let docIsCourant = false;
-         elements.forEach(eid => { const p = pathMap.get(eid); if (p?.isMuni) docIsMuni = true; if (p && !p.isMuni) docIsCourant = true; });
-         if (docIsMuni && docIsCourant) entrants.sharedCount++; else if (docIsMuni) entrants.muniCount++; else if (docIsCourant) entrants.courantCount++;
-
-         if (doc.ClosedDate) {
-           const closed = new Date(doc.ClosedDate);
-           const diff = Math.ceil((closed.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24));
-           if (diff >= 0) {
-             totalDelayDays += diff; closedCount++;
-             if (diff <= 30) entrants.deadlines.closed.within30++; else if (diff <= 60) entrants.deadlines.closed.within60++; else entrants.deadlines.closed.exceeded++;
-           }
-         } else if (doc.StateId !== 45 && doc.StateId !== 46) {
-           const today = new Date();
-           const diff = Math.ceil((today.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24));
-           if (diff >= 0) {
-             if (diff <= 30) entrants.deadlines.active.within30++; else if (diff <= 60) entrants.deadlines.active.within60++; else entrants.deadlines.active.exceeded++;
-           }
-         }
-      }
-    });
-
-    return { availableYears: [2026, 2025, 2024, 2023, 2022, 2021, 2020], entrants, assignments: Array.from(assignmentsSet.values()), averageDelay: closedCount > 0 ? totalDelayDays / closedCount : 0 };
-  } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchCabinetEvolution:`, err.message);
-    throw err;
-  }
+  return {
+    poles: uniquePoles.map(name => ({ name, count: assignments.filter(a => a.pole === name).length })),
+    dgas: uniqueDgas.map(name => ({ name, count: assignments.filter(a => a.dga === name).length })),
+    directions: uniqueDirs.map(name => ({ name, count: assignments.filter(a => a.dir === name).length })),
+    services: uniqueSvcs.map(name => ({ name, count: assignments.filter(a => a.service === name).length })),
+    statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
+  };
 }
+
+// Alias pour compatibilité si nécessaire
+export const fetchStatsByFilters = fetchCabinetEvolution;

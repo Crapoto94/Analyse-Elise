@@ -49,6 +49,12 @@ export default function Sidebar() {
       description: 'Analyses ville & cabinet',
     },
     {
+      label: 'Courrier',
+      icon: '📨',
+      href: '/explorer/courriers',
+      description: 'Explorateur documents & tâches',
+    },
+    {
       label: 'Explorateur d\'Entités',
       icon: '🔍',
       href: '/explorer',
@@ -90,7 +96,9 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+          const isActive = item.href === '/explorer' 
+            ? pathname === '/explorer' 
+            : (pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href)));
           return (
             <Link
               key={item.href}
