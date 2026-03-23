@@ -36,13 +36,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# IMPORTANT: Copy the generated prisma clients AND the prisma CLI for runtime migrations
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder /app/node_modules/@prisma/config ./node_modules/@prisma/config
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+# Copy the Prisma schema required for migrations
+COPY --from=builder /app/prisma ./prisma
+
+# Natively install ONLY the Prisma CLI to ensure all dependencies (debug, engines, etc) are correctly bundled
+RUN npm install prisma@^6.19.2 --no-save
 
 EXPOSE 5002
 ENV PORT 5002
