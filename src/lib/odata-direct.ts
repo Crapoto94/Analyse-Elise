@@ -566,9 +566,10 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
         }
       });
 
-      // Appliquer l'Anti-Redondance Verticale ET ajouter à assignmentsSet
+      let isAssignedToAny = false;
       Array.from(dirToServices.entries()).forEach(([dirName, servicesMap]) => {
          Array.from(servicesMap.entries()).forEach(([svc, pathObj]) => {
+             isAssignedToAny = true;
              const key = `${dirName}|${svc}`;
              if (!assignmentsSet.has(key)) {
                 assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: svc, count: 0 });
@@ -580,6 +581,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       Array.from(dirToDirectPath.entries()).forEach(([dirName, pathObj]) => {
          const services = dirToServices.get(dirName);
          if (!services || services.size === 0) {
+             isAssignedToAny = true;
              const key = `${dirName}|(Affectations directes)`;
              if (!assignmentsSet.has(key)) {
                 assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: '(Affectations directes)', count: 0 });
@@ -587,6 +589,15 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
              assignmentsSet.get(key).count++;
          }
       });
+
+      // Si pas affecté et pas de filtre pôle spécifique, on compte en "Non affecté"
+      if (!isAssignedToAny && (!filters || filters.pole === 'all')) {
+         const key = "(Non affecté)|(Non affecté)";
+         if (!assignmentsSet.has(key)) {
+            assignmentsSet.set(key, { direction: "(Non affecté)", dga: "(Non affecté)", service: "(Non affecté)", count: 0 });
+         }
+         assignmentsSet.get(key).count++;
+      }
 
       if (isMuni && isCourant) entrants.sharedCount++;
       else if (isMuni) entrants.muniCount++;
