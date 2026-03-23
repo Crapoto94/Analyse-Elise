@@ -193,76 +193,47 @@ export default function StatsCabinetPage() {
         <StatsCard title="Délai Moyen" value={`${data?.avgDelay || 0} j`} icon="⏱️" color="indigo" />
       </div>
 
-      {/* SLA & Nature Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* SLA Section */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Respect des Délais (SLA)</h2>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Seuils : 30j standard / 60j DRH</p>
-            </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Temps Réel</div>
+      {/* SLA Section - Full Width */}
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="flex justify-between items-center mb-10">
+          <div>
+            <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Respect des Délais (SLA)</h2>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Seuils : 30j standard / 60j DRH</p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 flex-1">
-             <div className="space-y-6">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                   <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div> Dossiers Clôturés
-                </h3>
-                <div className="flex gap-4">
-                  <CompactStatsCard title="Dans les temps" value={data?.sla?.closed?.within || 0} icon="✅" color="blue" />
-                  <CompactStatsCard title="Hors délais" value={data?.sla?.closed?.exceeded || 0} icon="🔴" color="red" />
-                </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden flex">
-                   <div 
-                    className="bg-blue-500 h-full" 
-                    style={{ width: `${(data?.sla?.closed?.within / (data?.sla?.closed?.within + data?.sla?.closed?.exceeded || 1)) * 100}%` }}
-                   />
-                </div>
-             </div>
-             <div className="space-y-6">
-                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                   <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div> En cours de traitement
-                </h3>
-                <div className="flex gap-4">
-                  <CompactStatsCard title="En attente OK" value={data?.sla?.active?.within || 0} icon="⏳" color="amber" />
-                  <CompactStatsCard title="En retard" value={data?.sla?.active?.exceeded || 0} icon="⚠️" color="red" />
-                </div>
-                <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden flex">
-                   <div 
-                    className="bg-amber-500 h-full" 
-                    style={{ width: `${(data?.sla?.active?.within / (data?.sla?.active?.within + data?.sla?.active?.exceeded || 1)) * 100}%` }}
-                   />
-                </div>
-             </div>
-          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Temps Réel</div>
         </div>
-
-        {/* Nature Breakdown */}
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
-          <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-8">Typologie (Top 10)</h2>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={natureData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={8}
-                  dataKey="value"
-                >
-                  {natureData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend layout="horizontal" align="center" verticalAlign="bottom" iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div> Dossiers Clôturés
+              </h3>
+              <div className="flex gap-4">
+                <CompactStatsCard title="Dans les temps" value={data?.sla?.closed?.within || 0} icon="✅" color="blue" />
+                <CompactStatsCard title="Hors délais" value={data?.sla?.closed?.exceeded || 0} icon="🔴" color="red" />
+              </div>
+              <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden flex">
+                  <div 
+                  className="bg-blue-500 h-full" 
+                  style={{ width: `${(data?.sla?.closed?.within / (data?.sla?.closed?.within + data?.sla?.closed?.exceeded || 1)) * 100}%` }}
+                  />
+              </div>
+            </div>
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div> En cours de traitement
+              </h3>
+              <div className="flex gap-4">
+                <CompactStatsCard title="En attente OK" value={data?.sla?.active?.within || 0} icon="⏳" color="amber" />
+                <CompactStatsCard title="En retard" value={data?.sla?.active?.exceeded || 0} icon="⚠️" color="red" />
+              </div>
+              <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden flex">
+                  <div 
+                  className="bg-amber-500 h-full" 
+                  style={{ width: `${(data?.sla?.active?.within / (data?.sla?.active?.within + data?.sla?.active?.exceeded || 1)) * 100}%` }}
+                  />
+              </div>
+            </div>
         </div>
       </div>
 
@@ -416,6 +387,34 @@ export default function StatsCabinetPage() {
                <Bar dataKey="courriers" name="Papier" stackId="a" fill="#3b82f6" radius={[10, 10, 0, 0]} />
              </BarChart>
            </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Nature Breakdown - Full Width at Bottom */}
+      <div className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700">
+        <h2 className="text-xl font-black text-gray-900 dark:text-white uppercase tracking-tight mb-8">Typologie des Dossiers (Top 10)</h2>
+        <div className="h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={natureData}
+                cx="50%"
+                cy="50%"
+                innerRadius={80}
+                outerRadius={140}
+                paddingAngle={8}
+                dataKey="value"
+              >
+                {natureData.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ borderRadius: '1.5rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 900, fontSize: '12px' }}
+              />
+              <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
