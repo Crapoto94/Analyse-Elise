@@ -132,23 +132,37 @@ export default function StatsCabinetPage() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 8);
 
-  // Group assignments by Direction
+  // Group assignments by DGA
   const groupedAssignments = (assignments || []).reduce((acc: any, curr: any) => {
-    const dirKey = curr.direction || 'Pôle DGS (Transverse)';
-    if (!acc[dirKey]) {
-      acc[dirKey] = {
-        name: dirKey,
-        dga: curr.dga,
+    const dgaKey = curr.dga || 'DGA (Transverse)';
+    if (!acc[dgaKey]) {
+      acc[dgaKey] = {
+        name: dgaKey,
         total: 0,
-        services: []
+        totalUnclosed: 0,
+        directions: {} as any
       };
     }
-    acc[dirKey].services.push(curr);
-    acc[dirKey].total += curr.count;
+    
+    const dirKey = curr.direction || '(Affectations directes du DGA)';
+    if (!acc[dgaKey].directions[dirKey]) {
+      acc[dgaKey].directions[dirKey] = {
+         name: dirKey,
+         total: 0,
+         unclosedCount: 0,
+         services: []
+      };
+    }
+
+    acc[dgaKey].directions[dirKey].services.push(curr);
+    acc[dgaKey].directions[dirKey].total += curr.count;
+    acc[dgaKey].directions[dirKey].unclosedCount += (curr.unclosedCount || 0);
+    acc[dgaKey].total += curr.count;
+    acc[dgaKey].totalUnclosed += (curr.unclosedCount || 0);
     return acc;
   }, {});
 
-  const sortedDirections = Object.values(groupedAssignments).sort((a: any, b: any) => b.total - a.total);
+  const sortedDgas = Object.values(groupedAssignments).sort((a: any, b: any) => b.total - a.total);
 
   const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -288,9 +302,14 @@ export default function StatsCabinetPage() {
       {/* Primary KPIs */}
       <div className="flex gap-4 w-full">
         <CompactStatsCard title="Total Enregistrés" value={entrants?.total || 0} icon="📊" color="blue" />
+        <CompactStatsCard 
+          title="Non Assignés" 
+          value={(assignments || []).find((a: any) => a.direction === '(Non affecté)')?.count || 0} 
+          icon="❓" 
+          color="red" 
+        />
         <CompactStatsCard title="Courriers (Papier)" value={entrants?.paperCount || 0} icon="📄" color="amber" />
         <CompactStatsCard title="Courriels (Mail)" value={entrants?.mailCount || 0} icon="📧" color="green" />
-        <CompactStatsCard title="Sans Réponse" value={entrants?.noResponseCount || 0} icon="⚠️" color="red" />
         <CompactStatsCard title="Délai de Réponse" value={`${Math.round(averageDelay || 0)} j`} icon="⏱️" color="indigo" />
       </div>
 
@@ -420,39 +439,70 @@ export default function StatsCabinetPage() {
           <span className="px-3 py-1 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-black rounded-full uppercase tracking-widest">Hiérarchie Pôle</span>
         </div>
         
-        <div className="space-y-6">
-          {sortedDirections.map((dir: any, idx: number) => (
-            <div key={idx} className="border border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden bg-gray-50/30 dark:bg-gray-900/10">
-              <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
-                <div>
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{dir.name}</h3>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{dir.dga || 'Direction Générale'}</p>
-                </div>
-                <div className="bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm">
-                   <span className="text-sm font-black text-gray-900 dark:text-white">{dir.total}</span>
-                   <span className="text-[10px] text-gray-400 ml-1">docs</span>
-                </div>
-              </div>
-              <div className="p-4 space-y-3">
-                {dir.services.map((svc: any, sIdx: number) => (
-                  <div key={sIdx} className="flex items-center gap-4 px-2">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 italic">
-                          {svc.service || '(Affectations directes)'}
-                        </span>
-                        <span className="text-xs font-black text-gray-900 dark:text-white">{svc.count}</span>
+        <div className="space-y-8">
+          {sortedDgas.map((dga: any, pIdx: number) => (
+            <div key={pIdx} className="space-y-4">
+               <div className="flex items-center gap-3 px-2">
+                  <div className="h-6 w-1 rounded-full bg-indigo-600 shadow-[0_0_10px_rgba(79,70,229,0.5)]"></div>
+                  <h3 className="text-base font-black text-gray-900 dark:text-white uppercase tracking-tight">{dga.name}</h3>
+                  <div className="flex-1 border-b border-dashed border-gray-200 dark:border-gray-700"></div>
+               <div className="flex gap-2">
+                     <span className="text-xs font-black text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 rounded-full whitespace-nowrap">{dga.total}</span>
+                     {dga.totalUnclosed > 0 && (
+                        <span className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1 rounded-full whitespace-nowrap">({dga.totalUnclosed})</span>
+                     )}
+                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.values(dga.directions).sort((a: any, b: any) => b.total - a.total).map((dir: any, idx: number) => (
+                    <div key={idx} className="border border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden bg-gray-50/30 dark:bg-gray-900/10 h-full flex flex-col">
+                      <div className="bg-gray-50 dark:bg-gray-800/50 px-5 py-3 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
+                        <div>
+                          <h4 className="text-[11px] font-black text-gray-900 dark:text-white uppercase tracking-tight leading-tight">{dir.name}</h4>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                             <span className="text-[10px] font-black text-gray-700 dark:text-gray-200">{dir.total}</span>
+                             {dir.unclosedCount > 0 && (
+                                <span className="text-[9px] font-bold text-red-500">({dir.unclosedCount})</span>
+                             )}
+                          </div>
+                        </div>
+                        <div className="bg-white dark:bg-gray-700 p-1.5 rounded-lg border border-gray-100 dark:border-gray-600 shadow-sm">
+                           <div className="h-4 w-4 rounded-md bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+                              <span className="text-[10px] font-black text-blue-600">🏛️</span>
+                           </div>
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                        <div 
-                          className="bg-blue-400 h-full rounded-full transition-all duration-1000" 
-                          style={{ width: `${dir.total ? (svc.count / dir.total) * 100 : 0}%` }}
-                        />
+                      <div className="p-4 space-y-3 flex-1">
+                        {dir.services.map((svc: any, sIdx: number) => (
+                          <div key={sIdx} className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="flex justify-between items-center mb-0.5">
+                                <div className="flex items-center gap-2">
+                                   <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 italic leading-tight">
+                                     {svc.service || '(Affectations directes)'}
+                                   </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                   <span className="text-[10px] font-black text-gray-900 dark:text-white">{svc.count}</span>
+                                   {svc.unclosedCount > 0 && (
+                                      <span className="text-[9px] font-bold text-red-500">({svc.unclosedCount})</span>
+                                   )}
+                                </div>
+                              </div>
+                              <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1 overflow-hidden">
+                                <div 
+                                  className="bg-blue-400 h-full rounded-full" 
+                                  style={{ width: `${dir.total ? (svc.count / dir.total) * 100 : 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+               </div>
             </div>
           ))}
         </div>

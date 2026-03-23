@@ -36,10 +36,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# IMPORTANT: Copy the generated prisma clients and their engines
-# These are often missed by Next.js standalone tracing when using multiple clients
+# IMPORTANT: Copy the generated prisma clients AND the prisma CLI for runtime migrations
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
 EXPOSE 5002
 ENV PORT 5002

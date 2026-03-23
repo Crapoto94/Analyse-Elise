@@ -49,8 +49,6 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
     }
 
     if (filters && (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
-      // Pour filtrer par pôle/direction/service, on utilise un créneau de tâches plus large (+15 jours) 
-      // pour capter les réaffectations qui arrivent après la création du doc.
       const taskStart = filter.match(/ge ([^ ]+)/)?.[1] || `${year}-01-01T00:00:00Z`;
       const docEnd = filter.match(/lt ([^ ]+)/)?.[1] || `${year + 1}-01-01T00:00:00Z`;
       const taskEndDate = new Date(docEnd);
@@ -59,20 +57,21 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
 
       const taskFilter = `RequestedDate ge ${taskStart} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
       
-      const [taskDocs, allPathsRaw] = await Promise.all([
+      const [taskDocsRaw, allPathsRaw] = await Promise.all([
         client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber desc`),
         (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) 
           ? Promise.resolve(cachedPaths) 
           : client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`)
       ]);
 
-      // Update cache
+      const yearDocIds = new Set(docs.map((d: any) => d.Id));
+      const taskDocs = taskDocsRaw.filter((t: any) => yearDocIds.has(t.DocumentId));
+
       if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
         cachedPaths = allPathsRaw;
         lastCacheUpdate = Date.now();
       }
 
-      // Dédoublonnage des chemins
       const pathMap = new Map();
       allPathsRaw.forEach((p: any) => {
         if (!pathMap.has(p.Id)) {
@@ -85,9 +84,7 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         }
       });
 
-      // Attribution Multi-Path
       const docToPaths = new Map<number, any[]>();
-      
       taskDocs.forEach((t: any) => {
         const path = pathMap.get(t.AssignedToStructureElementId);
         if (path) {
@@ -96,7 +93,6 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
         }
       });
 
-      const initialCount = docs.length;
       docs = docs.filter((d: any) => {
         const paths = docToPaths.get(d.Id);
         if (!paths || paths.length === 0) return false; 
@@ -108,17 +104,12 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
           if (filters.service !== 'all') {
             if (filters.service === '(Affectations directes)') {
               if (path.service) return false;
-            } else {
-              if (path.service !== filters.service) return false;
-            }
+            } else if (path.service !== filters.service) return false;
           }
           return true;
         });
       });
-      console.log(`[DEBUG STATS] Strict Task Filter: ${initialCount} -> ${docs.length}`);
     }
-
-    const totalTasks = 0; // Désactivé pour performance (Focus Courriers)
 
     const isMonthly = !month || month === 'all';
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -143,11 +134,11 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
 
     return {
       totalDocs: docs.length,
-      totalTasks: totalTasks,
+      totalTasks: 0,
       monthlyEvolution: chartData
     };
   } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchDirectStats:`, err.message);
+    console.error(`[OData-Direct] Error in fetchStatsByFilters:`, err.message);
     throw err;
   }
 }
@@ -155,216 +146,108 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
 export async function fetchDirectHierarchy(year: number, filters?: { pole: string, dga: string, dir: string, month?: string, status?: string }) {
   try {
     const config = await getODataConfig();
-    if (!config?.baseUrl) throw new Error('OData config missing');
     const client = new ODataClient(config);
 
-    // 1. On identifie d'abord les documents CRÉÉS dans la période sélectionnée
+    const isMonthly = !filters?.month || filters.month === 'all';
     let startDate = `${year}-01-01T00:00:00Z`;
     let endDate = `${year + 1}-01-01T00:00:00Z`;
-    let docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}`;
-
-    if (filters?.month && filters.month !== 'all') {
-      const m = parseInt(filters.month);
+    if (!isMonthly) {
+      const m = parseInt(filters!.month || '1');
       startDate = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
       const nextM = m === 12 ? 1 : m + 1;
       const nextY = m === 12 ? year + 1 : year;
       endDate = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-      docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}`;
     }
 
-    if (filters?.status && filters.status !== 'all') {
-      docFilter += ` and StateId eq ${filters.status}`;
-    }
-
-    // 2. On récupère les dimensions (États, Structure), les documents et les tâches
-    const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${endDate} and TaskProcessingTypeId eq 114`;
+    const taskEnd = new Date(year + 1, 5, 1).toISOString(); 
+    const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
     
-    const [yearDocs, statesRaw, allPathsRaw, taskDocs] = await Promise.all([
-      client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,DirectionId`), 
-      (cachedStatuses && Date.now() - lastCacheUpdate < CACHE_TTL) 
-        ? Promise.resolve({ value: cachedStatuses }) 
-        : client.request<any>('DimDocumentState?$select=Id,LabelFrFr'),
-      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) 
-        ? Promise.resolve(cachedPaths) 
-        : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey"),
-      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(tasksFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber`)
+    const taskDocs = await client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(tasksFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber`);
+
+    const docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}${filters?.status && filters.status !== 'all' ? ` and StateId eq ${filters.status}` : ''}`;
+    const yearDocsBase = await client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,DirectionId`);
+    const yearDocIdsInPeriod = new Set(yearDocsBase.map((d: any) => d.Id));
+
+    const taskDocsFiltered = taskDocs.filter((t: any) => yearDocIdsInPeriod.has(t.DocumentId));
+    const activeDocIdsFromFilteredTasks = new Set<number>(taskDocsFiltered.map((t: any) => t.DocumentId));
+
+    const [statesRaw, allPathsRaw] = await Promise.all([
+      (cachedStatuses && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve({ value: cachedStatuses }) : client.request<any>('DimDocumentState?$select=Id,LabelFrFr'),
+      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey")
     ]);
 
-    // Update cache
     if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
       cachedPaths = allPathsRaw;
       cachedStatuses = statesRaw.value || [];
       lastCacheUpdate = Date.now();
     }
 
-    const statuses = (statesRaw.value || []).map((s: any) => ({
-      id: s.Id,
-      name: s.LabelFrFr || s.Label
-    }));
+    const pathMap = new Map<number, any>(allPathsRaw.map((p: any) => [p.Id, {
+      pole: (p.Level2 || '').trim(),
+      dga: (p.Level3 || '').trim(),
+      dir: (p.Level4 || '').trim(),
+      service: (p.Level5 || '').trim(),
+      typeKey: (p.StructureElementTypeKey || '').toUpperCase()
+    }]));
 
-    // 4. Attribution Tâches - Permettre la multi-affectation
-    const docToElements: Record<number, Set<number>> = {};
-    const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
-    
-    // Un document obtient +1 point de comptage pour CHAQUE Direction qui a eu la tâche
-    taskDocs.forEach((t: any) => {
-      if (yearDocIds.has(t.DocumentId)) {
-        if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = new Set();
-        docToElements[t.DocumentId].add(t.AssignedToStructureElementId);
+    const docToElements: Record<number, number[]> = {};
+    taskDocsFiltered.forEach((t: any) => {
+      if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = [];
+      docToElements[t.DocumentId].push(t.AssignedToStructureElementId);
+    });
+
+    const docPrimaryPath = new Map<number, any>();
+    activeDocIdsFromFilteredTasks.forEach((docId: number) => {
+      const elements = docToElements[docId] || [];
+      for (const elementId of elements) {
+        const p = pathMap.get(elementId);
+        if (p && p.dir) {
+          docPrimaryPath.set(docId, p);
+          break;
+        }
       }
     });
-
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElements: ${Object.keys(docToElements).length}`);
-
-    // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
-    const allPaths: any[] = [];
-    const seenElementIds = new Set<number>();
-    allPathsRaw.forEach((p: any) => {
-      if (!seenElementIds.has(p.Id)) {
-        seenElementIds.add(p.Id);
-        allPaths.push(p);
-      }
-    });
-    
-    // structurePaths inclut tous les éléments (SERVICE, USER, vide) pour montrer les 0 aussi
-    const structurePaths = allPaths; // On ne filtre plus par type pour inclure individus et entités é 0
-    console.log(`[DEBUG HIERARCHY] allPaths: ${allPaths.length} | structurePaths: ${structurePaths.length}`);
-
-    const countsByElementId: Record<number, Set<number>> = {};
-    Object.entries(docToElements).forEach(([docIdStr, elementIds]) => {
-      const docId = parseInt(docIdStr);
-      elementIds.forEach(elementId => {
-         if (!countsByElementId[elementId]) countsByElementId[elementId] = new Set();
-         countsByElementId[elementId].add(docId);
-      });
-    });
-
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | affected docs count: ${Object.keys(docToElements).length}`);
-    const sampleIds = Array.from(yearDocIds).slice(0, 5);
-    console.log(`[DEBUG COUNTS] sample yearDocIds: ${sampleIds.join(', ')}`);
 
     const getHierarchyWithCounts = (level: string, currentFilters?: any) => {
-      const idsByName: Record<string, Set<number>> = {};
-      
-      // 1. Initialisation des noms basés sur la structure administrative
-      let validStructs = structurePaths;
-      if (currentFilters) {
-        if (currentFilters.pole && currentFilters.pole !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level2?.trim() === currentFilters.pole);
-        }
-        if (currentFilters.dga && currentFilters.dga !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level3?.trim() === currentFilters.dga);
-        }
-        if (currentFilters.dir && currentFilters.dir !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level4?.trim() === currentFilters.dir);
-        }
-      }
-      
-      const validNames = new Set(validStructs.map((p: any) => (p[level] || '').trim()).filter(Boolean));
-      validNames.forEach(name => idsByName[name as string] = new Set());
-
-      // 2. AJOUT des catégories spéciales au niveau SERVICE (Level5)
-      if (level === 'Level5' && currentFilters?.dir && currentFilters.dir !== 'all') {
-        const directLabel = `(Affectations directes)`;
-        idsByName[directLabel] = new Set();
-        
-        allPaths.forEach((p: any) => {
-          if (p.Level4?.trim() === currentFilters.dir) {
-             const typeKey = (p.StructureElementTypeKey || '').toUpperCase();
-
-             // Cas 1: Affectation directe à la Direction (pas de Level5 → ID du service/direction lui-même)
-             if (!p.Level5) {
-                idsByName[directLabel].add(p.Id);
-             }
-             // Cas 2: Individus (USER ou type inconnu avec Level5/6 renseigné)
-             else if (typeKey === 'USER' || (typeKey !== 'SERVICE' && p.Level5)) {
-                const userName = (p.Level5 || p.Level6 || "Agent Individuel").trim();
-                const finalName = (userName === currentFilters.dir) ? `${userName} (Individuel)` : userName;
-                if (!idsByName[finalName]) idsByName[finalName] = new Set();
-                idsByName[finalName].add(p.Id);
-             }
-             // Cas 3: Services standards (Level5 + type SERVICE ou vide)
-             else if (p.Level5 && (typeKey === 'SERVICE' || typeKey === '')) {
-                const sName = p.Level5.trim();
-                if (!idsByName[sName]) idsByName[sName] = new Set();
-                idsByName[sName].add(p.Id);
-             }
-          }
-        });
-      } else {
-        // Logique standard pour Pôle, DGA, Direction
-        if (level === 'Level3' || level === 'Level4') {
-           idsByName['(Affectations directes)'] = new Set();
-        }
-        
-        allPaths.forEach(p => {
-          let name = (p[level] || '').trim();
-          if (!name && (level === 'Level3' || level === 'Level4')) {
-             name = '(Affectations directes)';
-          }
-
-          if (name && idsByName.hasOwnProperty(name)) {
-            let matches = true;
-            if (currentFilters) {
-              if (currentFilters.pole && currentFilters.pole !== 'all' && p.Level2?.trim() !== currentFilters.pole) matches = false;
-              if (currentFilters.dga && currentFilters.dga !== 'all' && p.Level3?.trim() !== currentFilters.dga) matches = false;
-              if (currentFilters.dir && currentFilters.dir !== 'all' && p.Level4?.trim() !== currentFilters.dir) matches = false;
-            }
-            if (matches && p.Id) {
-              idsByName[name].add(p.Id);
-            }
-          }
-        });
-      }
-
-      // 3. Calcul final des comptes uniques par entité avec PURGE des Affectations directes (Anti-Redondance Verticale)
       const map: Record<string, number> = {};
-      const directKey = '(Affectations directes)';
-      
-      const docsInSpecificEntities = new Set<number>();
-      const specificEntitiesMap: Record<string, Set<number>> = {};
-      let directDocsSet = new Set<number>();
+      activeDocIdsFromFilteredTasks.forEach((docId: number) => {
+         const p = docPrimaryPath.get(docId);
+         if (!p) return;
 
-      Object.entries(idsByName).forEach(([name, idSet]) => {
-        const uniqueDocsInEntity = new Set<number>();
-        idSet.forEach(structId => {
-          if (countsByElementId[structId]) {
-            countsByElementId[structId].forEach(docId => {
-               uniqueDocsInEntity.add(docId);
-            });
-          }
-        });
-        
-        if (name === directKey) {
-           directDocsSet = uniqueDocsInEntity;
-        } else {
-           specificEntitiesMap[name] = uniqueDocsInEntity;
-           uniqueDocsInEntity.forEach(id => docsInSpecificEntities.add(id));
-        }
+         let matches = true;
+         if (currentFilters) {
+            if (currentFilters.pole && currentFilters.pole !== 'all' && p.pole !== currentFilters.pole) matches = false;
+            if (currentFilters.dga && currentFilters.dga !== 'all' && p.dga !== currentFilters.dga) matches = false;
+            if (currentFilters.dir && currentFilters.dir !== 'all' && p.dir !== currentFilters.dir) matches = false;
+         }
+         if (!matches) return;
+
+         let name = "";
+         if (level === 'Level2') name = p.pole;
+         else if (level === 'Level3') name = p.dga;
+         else if (level === 'Level4') name = p.dir;
+         else if (level === 'Level5') {
+            if (!p.service) name = '(Affectations directes)';
+            else if (p.typeKey === 'USER' || (p.typeKey !== 'SERVICE' && p.service)) name = (p.service === p.dir) ? `${p.service} (Individuel)` : p.service;
+            else name = p.service;
+         }
+         if (!name && (level === 'Level3' || level === 'Level4')) name = '(Affectations directes)';
+         
+         if (name) map[name] = (map[name] || 0) + 1;
       });
-      
-      // Affectations directes ne garde QUE les orphelins (Ceux qui n'ont aucune affectation plus spécifique au même niveau)
-      const filteredDirectDocs = new Set([...directDocsSet].filter(id => !docsInSpecificEntities.has(id)));
-      
-      // Alimentation Finale
-      if (filteredDirectDocs.size > 0) {
-        map[directKey] = filteredDirectDocs.size;
+      if (level === 'Level2' && (!currentFilters || (currentFilters.pole === 'all' && currentFilters.dga === 'all'))) {
+         const unassignedCount = Array.from(yearDocIdsInPeriod).filter(id => !docToElements[id]).length;
+         if (unassignedCount > 0) map["(Non affecté)"] = unassignedCount;
       }
-      Object.entries(specificEntitiesMap).forEach(([name, uniqueSet]) => {
-        if (uniqueSet.size > 0) map[name] = uniqueSet.size;
-      });
-      
-      return Object.entries(map)
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([name, count]) => ({ name, count }));
+      return Object.entries(map).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name, count]) => ({ name, count }));
     };
 
     return {
-      poles: getHierarchyWithCounts('Level2'), // Pôles globaux
+      poles: getHierarchyWithCounts('Level2'),
       dgas: getHierarchyWithCounts('Level3', filters),
       directions: getHierarchyWithCounts('Level4', filters),
       services: getHierarchyWithCounts('Level5', filters),
-      statuses
+      statuses: (statesRaw.value || []).map((s: any) => ({ id: s.Id, name: s.LabelFrFr || s.Label }))
     };
   } catch (err: any) {
     console.error(`[OData-Direct] Error in fetchDirectHierarchy:`, err.message);
@@ -373,267 +256,139 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 }
 
 export async function fetchCabinetEvolution(year: number, month?: string, filters?: any) {
-  const config = await getODataConfig();
-  if (!config?.baseUrl) throw new Error('OData config missing');
-  const client = new ODataClient(config);
-
   try {
+    const config = await getODataConfig();
+    const client = new ODataClient(config);
+
     const isMonthly = !month || month === 'all';
-    let docFilter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z`;
+    let startDate = `${year}-01-01T00:00:00Z`;
+    let endDate = `${year + 1}-01-01T00:00:00Z`;
     if (!isMonthly) {
       const m = parseInt(month || '1');
-      const start = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
+      startDate = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
       const nextM = m === 12 ? 1 : m + 1;
       const nextY = m === 12 ? year + 1 : year;
-      const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-      docFilter = `CreatedDate ge ${start} and CreatedDate lt ${end}`;
+      endDate = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
     }
 
-    // Provision de tâches beaucoup plus large (+6 mois de N+1) pour capter les affectations tardives
-    const taskEnd = new Date(year + 1, 5, 1).toISOString(); // 1er Juin N+1
-    const taskFilter = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
+    const taskEnd = new Date(year + 1, 5, 1).toISOString(); 
+    const taskFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
 
-    // DEBUG DUMP TASK TYPES
-    const taskTypesRaw = await client.requestAll<any>("DimTaskProcessingType?$select=Id,LabelFrFr");
-    require('fs').writeFileSync('c:/dev/Stat_Elise_New/tasktypes.json', JSON.stringify(taskTypesRaw, null, 2));
-
-    const [docsRaw, taskDocs, allPathsRaw, allTypesRaw] = await Promise.all([
-      client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId`),
-      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber`),
+    const [allPathsRaw, allTypesRaw, taskDocs] = await Promise.all([
       (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey"),
-      (cachedTypes && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedTypes) : client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr")
+      (cachedTypes && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedTypes) : client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr"),
+      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber`)
     ]);
 
-    // Update Cache
+    // Documents créés dans la période (Base de l'évolution et des affectations)
+    const docFilter = `CreatedDate ge ${startDate} and CreatedDate lt ${endDate}`;
+    const yearDocsBase = await client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`);
+    const yearDocIdsInPeriod = new Set(yearDocsBase.map((d: any) => d.Id));
+
     if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-      cachedPaths = allPathsRaw;
-      cachedTypes = allTypesRaw;
-      lastCacheUpdate = Date.now();
+       cachedPaths = allPathsRaw; cachedTypes = allTypesRaw; lastCacheUpdate = Date.now();
     }
 
-    const pathMap = new Map();
-    allPathsRaw.forEach((p: any) => {
-      pathMap.set(p.Id, {
-        isMuni: p.Level2?.toUpperCase().includes('CABINET'),
-        pole: p.Level2?.trim(),
-        dga: p.Level3?.trim(),
-        dir: p.Level4?.trim(),
-        service: p.Level5?.trim(),
-        typeKey: p.StructureElementTypeKey?.toUpperCase() || ''
-      });
-    });
+    const pathMap = new Map<number, any>(allPathsRaw.map((p: any) => [p.Id, {
+      isMuni: (p.Level2 || '').toUpperCase().includes('CABINET'),
+      pole: (p.Level2 || '').trim(), dga: (p.Level3 || '').trim(), dir: (p.Level4 || '').trim(), service: (p.Level5 || '').trim(),
+      typeKey: (p.StructureElementTypeKey || '').toUpperCase()
+    }]));
 
-    const typeMap = new Map();
-    allTypesRaw.forEach((t: any) => typeMap.set(t.Id, t.LabelFrFr));
-
-    // 2. Classification et Affectations
-    const docToTasks = new Map<number, any[]>();
-    const uniqueLevel2 = new Set<string>();
+    const typeMap = new Map<number, string>(allTypesRaw.map((t: any) => [t.Id, t.LabelFrFr]));
     
-    taskDocs.forEach(t => {
-      const p = pathMap.get(t.AssignedToStructureElementId);
-      if (p?.pole) uniqueLevel2.add(p.pole);
-      
-      // Historique complet pour de multiples affectations
-      if (!docToTasks.has(t.DocumentId)) docToTasks.set(t.DocumentId, []);
-      docToTasks.get(t.DocumentId)?.push(t);
+    // Filtrer les tâches pour ne garder QUE celles des documents créés cette année
+    const taskDocsFiltered = taskDocs.filter((t: any) => yearDocIdsInPeriod.has(t.DocumentId));
+    
+    const docToElements: Record<number, number[]> = {};
+    taskDocsFiltered.forEach((t: any) => {
+      if (!docToElements[t.DocumentId]) docToElements[t.DocumentId] = [];
+      docToElements[t.DocumentId].push(t.AssignedToStructureElementId);
     });
 
-    console.log(`[DEBUG CABINET] Unique Level2 found in Tasks:`, Array.from(uniqueLevel2));
-
-    let docs = docsRaw;
-    // Pré-filtrage global des documents (état et hiérarchie)
-    if (filters && (filters.status !== 'all' || filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
-      docs = docs.filter((doc: any) => {
-        // Filter by status
-        if (filters.status && filters.status !== 'all') {
-          const statusId = parseInt(filters.status);
-          if (doc.StateId !== statusId) return false;
-        }
-
-        // Filter by hierarchy (Si un document a AU MOINS UNE TACHE qui matche le filtre, on le garde)
-        if (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all') {
-          const tasks = docToTasks.get(doc.Id) || [];
-          let hasMatchingTask = false;
-          for (const t of tasks) {
-            const path = pathMap.get(t.AssignedToStructureElementId);
-            if (path) {
-              let match = true;
-              if (filters.pole !== 'all' && path.pole !== filters.pole) match = false;
-              if (filters.dga !== 'all' && path.dga !== filters.dga) match = false;
-              if (filters.dir !== 'all' && path.dir !== filters.dir) match = false;
-              if (filters.service !== 'all') {
-                if (filters.service === '(Affectations directes)') {
-                   if (path.service) match = false;
-                } else {
-                   if (path.service !== filters.service) match = false;
-                }
-              }
-              if (match) hasMatchingTask = true;
-            }
-          }
-          if (!hasMatchingTask) return false;
-        }
-        return true;
-      });
-    }
-
-    const chartSize = isMonthly ? 12 : new Date(year, parseInt(month || '1'), 0).getDate();
+    const evolutionSize = isMonthly ? 12 : new Date(year, parseInt(month || '1'), 0).getDate();
     const entrants = {
-      total: docs.length,
-      paperCount: 0,
-      mailCount: 0,
-      noResponseCount: 0,
-      muniCount: 0,
-      courantCount: 0,
-      sharedCount: 0,
-      byMonth: Array(chartSize).fill(0).map(() => ({ courriers: 0, courriels: 0 })),
+      total: yearDocsBase.length, paperCount: 0, mailCount: 0, noResponseCount: 0, muniCount: 0, courantCount: 0, sharedCount: 0,
+      byMonth: Array(evolutionSize).fill(0).map(() => ({ courriers: 0, courriels: 0 })),
       byNature: {} as Record<string, number>,
-      deadlines: { 
-        closed: { within30: 0, within60: 0, exceeded: 0 },
-        active: { within30: 0, within60: 0, exceeded: 0 }
-      }
+      deadlines: { closed: { within30: 0, within60: 0, exceeded: 0 }, active: { within30: 0, within60: 0, exceeded: 0 } }
     };
 
     const assignmentsSet = new Map<string, any>();
-    let totalDelayDays = 0;
-    let closedCount = 0;
+    let totalDelayDays = 0; let closedCount = 0;
 
-    docs.forEach((doc: any) => {
-      const date = new Date(doc.CreatedDate);
+    yearDocsBase.forEach((doc: any) => {
+      const isCreatedDoc = true; 
+      const docDate = new Date(doc.CreatedDate);
       const isEmail = Number(doc.MediumId) === 88;
-      const index = isMonthly ? date.getMonth() : date.getDate() - 1;
-      
-      // Basic Stats
-      if (index >= 0 && index < chartSize) {
-        if (isEmail) { entrants.byMonth[index].courriels++; entrants.mailCount++; }
-        else { entrants.byMonth[index].courriers++; entrants.paperCount++; }
+      const index = isMonthly ? docDate.getMonth() : docDate.getDate() - 1;
+
+      if (index >= 0 && index < evolutionSize) {
+         if (isEmail) { entrants.byMonth[index].courriels++; entrants.mailCount++; }
+         else { entrants.byMonth[index].courriers++; entrants.paperCount++; }
+         if (doc.StateId !== 45 && doc.StateId !== 46) entrants.noResponseCount++;
+         const nature = typeMap.get(doc.TypeId) || 'Autre';
+         entrants.byNature[nature] = (entrants.byNature[nature] || 0) + 1;
       }
-      if (doc.StateId !== 45 && doc.StateId !== 46) entrants.noResponseCount++;
 
-      // Nature (Thématique)
-      const nature = typeMap.get(doc.TypeId) || 'Autre';
-      entrants.byNature[nature] = (entrants.byNature[nature] || 0) + 1;
+      const elements = docToElements[doc.Id] || [];
+      const isUnclosed = doc.ClosedDate === null;
+      let isAccountedInHierarchy = false;
 
-      const tasks = docToTasks.get(doc.Id) || [];
-      let isMuni = false;
-      let isCourant = false;
-      
-      // La qualification Muni/Courant dépend de tout l'historique du document
-      tasks.forEach((t: any) => {
-        const p = pathMap.get(t.AssignedToStructureElementId);
-        if (p?.isMuni) isMuni = true;
-        if (p && !p.isMuni) isCourant = true;
-      });
-
-      const dirToServices = new Map<string, Map<string, any>>(); // dirName -> Map<serviceName, pathObj>
-      let dirToDirectPath = new Map<string, any>(); // dirName -> pathObj
-
-      tasks.forEach((t: any) => {
-        const path = pathMap.get(t.AssignedToStructureElementId);
-        if (path) {
-          let addIt = true;
-          if (filters) {
-            if (filters.pole !== 'all' && path.pole !== filters.pole) addIt = false;
-            if (filters.dga !== 'all' && path.dga !== filters.dga) addIt = false;
-            if (filters.dir !== 'all' && path.dir !== filters.dir) addIt = false;
-            if (filters.service !== 'all') {
-              if (filters.service === '(Affectations directes)' && path.service) addIt = false;
-              if (filters.service !== '(Affectations directes)' && path.service !== filters.service) addIt = false;
+      for (const elementId of elements) {
+         const p = pathMap.get(elementId);
+         if (!p || !p.dir) continue;
+         
+         if (!isAccountedInHierarchy) {
+            isAccountedInHierarchy = true;
+            let svc = p.service || '(Affectations directes)';
+            if (p.service && (p.typeKey === 'USER' || (p.typeKey !== 'SERVICE' && p.service))) {
+               svc = (p.service === p.dir) ? `${p.service} (Individuel)` : p.service;
             }
-          }
-          
-          if (addIt) {
-              const dirName = path.dir || '(Indéterminé)';
-              let serviceName = null;
-              
-              if (!path.service) {
-                 dirToDirectPath.set(dirName, path);
-              } 
-              else if (path.typeKey === 'USER' || (path.typeKey !== 'SERVICE' && path.service)) {
-                 const userName = path.service;
-                 serviceName = (userName === dirName) ? `${userName} (Individuel)` : userName;
-              }
-              else if (path.service && (path.typeKey === 'SERVICE' || path.typeKey === '')) {
-                 serviceName = path.service;
-              }
-
-              if (serviceName) {
-                 if (!dirToServices.has(dirName)) dirToServices.set(dirName, new Map());
-                 dirToServices.get(dirName)?.set(serviceName, path);
-              }
-          }
-        }
-      });
-
-      let isAssignedToAny = false;
-      Array.from(dirToServices.entries()).forEach(([dirName, servicesMap]) => {
-         Array.from(servicesMap.entries()).forEach(([svc, pathObj]) => {
-             isAssignedToAny = true;
-             const key = `${dirName}|${svc}`;
-             if (!assignmentsSet.has(key)) {
-                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: svc, count: 0 });
-             }
-             assignmentsSet.get(key).count++;
-         });
-      });
-
-      Array.from(dirToDirectPath.entries()).forEach(([dirName, pathObj]) => {
-         const services = dirToServices.get(dirName);
-         if (!services || services.size === 0) {
-             isAssignedToAny = true;
-             const key = `${dirName}|(Affectations directes)`;
-             if (!assignmentsSet.has(key)) {
-                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: '(Affectations directes)', count: 0 });
-             }
-             assignmentsSet.get(key).count++;
+            const key = `${p.dir}|${svc}`;
+            if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: p.pole, direction: p.dir, dga: p.dga, service: svc, count: 0, unclosedCount: 0 });
+            assignmentsSet.get(key).count++;
+            if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
          }
-      });
-
-      // Si pas affecté et pas de filtre pôle spécifique, on compte en "Non affecté"
-      if (!isAssignedToAny && (!filters || filters.pole === 'all')) {
-         const key = "(Non affecté)|(Non affecté)";
-         if (!assignmentsSet.has(key)) {
-            assignmentsSet.set(key, { direction: "(Non affecté)", dga: "(Non affecté)", service: "(Non affecté)", count: 0 });
-         }
-         assignmentsSet.get(key).count++;
       }
 
-      if (isMuni && isCourant) entrants.sharedCount++;
-      else if (isMuni) entrants.muniCount++;
-      else if (isCourant) entrants.courantCount++;
+      if (elements.length > 0 && !isAccountedInHierarchy && (!filters || filters.pole === 'all')) {
+         const key = "(Indéterminé)|(Indéterminé)";
+         if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: "(Indéterminé)", direction: "(Indéterminé)", dga: "(Indéterminé)", service: "(Indéterminé)", count: 0, unclosedCount: 0 });
+         assignmentsSet.get(key).count++; if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
+      }
 
-      // Delays (SLA)
-      if (doc.ClosedDate) {
-        const closed = new Date(doc.ClosedDate);
-        const diff = Math.ceil((closed.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0) {
-          totalDelayDays += diff;
-          closedCount++;
-          if (diff <= 30) entrants.deadlines.closed.within30++;
-          else if (diff <= 60) entrants.deadlines.closed.within60++;
-          else entrants.deadlines.closed.exceeded++;
-        }
-      } else if (doc.StateId !== 45 && doc.StateId !== 46) {
-        // En Cours
-        const today = new Date();
-        const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0) {
-          if (diff <= 30) entrants.deadlines.active.within30++;
-          else if (diff <= 60) entrants.deadlines.active.within60++;
-          else entrants.deadlines.active.exceeded++;
-        }
+      if (elements.length === 0 && isCreatedDoc && (!filters || filters.pole === 'all')) {
+         const key = "(Non affecté)|(Non affecté)";
+         if (!assignmentsSet.has(key)) assignmentsSet.set(key, { pole: "(Non affecté)", direction: "(Non affecté)", dga: "(Non affecté)", service: "(Non affecté)", count: 0, unclosedCount: 0 });
+         assignmentsSet.get(key).count++; if (isUnclosed) assignmentsSet.get(key).unclosedCount++;
+      }
+
+      if (isCreatedDoc) {
+         let docIsMuni = false; let docIsCourant = false;
+         elements.forEach(eid => { const p = pathMap.get(eid); if (p?.isMuni) docIsMuni = true; if (p && !p.isMuni) docIsCourant = true; });
+         if (docIsMuni && docIsCourant) entrants.sharedCount++; else if (docIsMuni) entrants.muniCount++; else if (docIsCourant) entrants.courantCount++;
+
+         if (doc.ClosedDate) {
+           const closed = new Date(doc.ClosedDate);
+           const diff = Math.ceil((closed.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24));
+           if (diff >= 0) {
+             totalDelayDays += diff; closedCount++;
+             if (diff <= 30) entrants.deadlines.closed.within30++; else if (diff <= 60) entrants.deadlines.closed.within60++; else entrants.deadlines.closed.exceeded++;
+           }
+         } else if (doc.StateId !== 45 && doc.StateId !== 46) {
+           const today = new Date();
+           const diff = Math.ceil((today.getTime() - docDate.getTime()) / (1000 * 60 * 60 * 24));
+           if (diff >= 0) {
+             if (diff <= 30) entrants.deadlines.active.within30++; else if (diff <= 60) entrants.deadlines.active.within60++; else entrants.deadlines.active.exceeded++;
+           }
+         }
       }
     });
 
-    return {
-      availableYears: [2026, 2025, 2024, 2023, 2022, 2021, 2020],
-      entrants,
-      assignments: Array.from(assignmentsSet.values()),
-      averageDelay: closedCount > 0 ? totalDelayDays / closedCount : 0
-    };
+    return { availableYears: [2026, 2025, 2024, 2023, 2022, 2021, 2020], entrants, assignments: Array.from(assignmentsSet.values()), averageDelay: closedCount > 0 ? totalDelayDays / closedCount : 0 };
   } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchCabinetStats:`, err.message);
+    console.error(`[OData-Direct] Error in fetchCabinetEvolution:`, err.message);
     throw err;
   }
 }

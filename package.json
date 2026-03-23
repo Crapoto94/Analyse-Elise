@@ -1,6 +1,6 @@
 {
   "name": "odata-app",
-  "version": "0.1.62",
+  "version": "0.1.75",
   "private": true,
   "scripts": {
     "dev": "next dev -p 5002",
