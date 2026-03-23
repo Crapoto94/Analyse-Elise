@@ -396,8 +396,8 @@ export default function StatsCabinetPage() {
                                 </div>
                                 <div className="flex items-center gap-1">
                                    <span className="text-[10px] font-black text-gray-900 dark:text-white">{svc.count}</span>
-                                   {svc.unclosedCount > 0 && (
-                                      <span className="text-[9px] font-bold text-red-500">({svc.unclosedCount})</span>
+                                   {svc.activeCount > 0 && (
+                                      <span className="text-[9px] font-bold text-red-500">({svc.activeCount})</span>
                                    )}
                                 </div>
                               </div>
