@@ -14,7 +14,7 @@ export default function Home() {
           Connectez-vous à votre passerelle OData Elise BI pour explorer, filtrer et analyser vos données statistiques en temps réel.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/connect" className="btn-primary">
+          <Link href="/login" className="btn-primary">
             Commencer l&apos;exploration
           </Link>
           <a 
