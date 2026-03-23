@@ -71,16 +71,23 @@ export default function EntityPage({ params }: { params: Promise<{ entity: strin
     return String(val);
   }
 
-  // Client-side filter on displayed values
+  // Client-side filter on displayed values + Global exclusion
   const filteredData = useMemo(() => {
-    return data.filter(row =>
-      columns.every(col => {
+    const EXCLUDED_NAME = "ABBAS Isabelle";
+    
+    return data.filter(row => {
+      // 1. Global Exclusion check
+      const rowString = JSON.stringify(row).toUpperCase();
+      if (rowString.includes(EXCLUDED_NAME.toUpperCase())) return false;
+
+      // 2. Column filters check
+      return columns.every(col => {
         const filter = colFilters[col]?.toLowerCase().trim();
         if (!filter) return true;
         const cell = renderCell(col, row[col]).toLowerCase();
         return cell.includes(filter);
-      })
-    );
+      });
+    });
   }, [data, colFilters, columns]);
 
   return (

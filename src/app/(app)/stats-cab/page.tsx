@@ -38,7 +38,7 @@ export default function StatsCabinetPage() {
   const [availableStatuses, setAvailableStatuses] = useState<{id: number, name: string}[]>([]);
 
   // Hierarchy Filters State
-  const [poleFilter, setPoleFilter] = useState('all');
+  const [poleFilter, setPoleFilter] = useState('DGS - Direction Générale des Services');
   const [dgaFilter, setDgaFilter] = useState('all');
   const [dirFilter, setDirFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
@@ -60,12 +60,6 @@ export default function StatsCabinetPage() {
         dir: dirFilter,
         service: serviceFilter
       });
-      const res = await fetch(`/api/stats/cabinet-v2?${params}`);
-      const json = await res.json();
-      setData(json);
-      if (json.availableYears) setAvailableYears(json.availableYears);
-
-      // Update hierarchy options when filters change
       const hParams = new URLSearchParams({
          year: String(year),
          month: month,
@@ -74,9 +68,22 @@ export default function StatsCabinetPage() {
          dga: dgaFilter,
          dir: dirFilter
       });
-      const hRes = await fetch(`/api/hierarchy?${hParams}`);
-      const hJson = await hRes.json();
+
+      // parallel fetch to avoid double refresh/flashing
+      const [res, hRes] = await Promise.all([
+        fetch(`/api/stats/cabinet-v2?${params}`),
+        fetch(`/api/hierarchy?${hParams}`)
+      ]);
       
+      const [json, hJson] = await Promise.all([
+        res.json(),
+        hRes.json()
+      ]);
+
+      // Update all stats and hierarchy in one go (React 18 batches these automagically)
+      setData(json);
+      if (json.availableYears) setAvailableYears(json.availableYears);
+
       if (hJson.statuses) setAvailableStatuses(hJson.statuses);
       setPoles(hJson.poles || []);
       setDgas(hJson.dgas || []);
@@ -130,23 +137,33 @@ export default function StatsCabinetPage() {
     .sort((a, b) => b.value - a.value)
     .slice(0, 8);
 
-  // Group assignments by Direction
-  const groupedAssignments = (assignments || []).reduce((acc: any, curr: any) => {
-    const dirKey = curr.direction || 'Pôle DGS (Transverse)';
-    if (!acc[dirKey]) {
-      acc[dirKey] = {
+  // Group assignments by DGA, then Direction
+  const dgaGroups = (assignments || []).reduce((acc: any, curr: any) => {
+    const dgaKey = curr.dga || 'Direction Générale (Transverse)';
+    const dirKey = curr.direction || 'Transverse';
+    
+    if (!acc[dgaKey]) acc[dgaKey] = { name: dgaKey, directions: {} };
+    if (!acc[dgaKey].directions[dirKey]) {
+      acc[dgaKey].directions[dirKey] = {
         name: dirKey,
-        dga: curr.dga,
         total: 0,
+        active: 0,
         services: []
       };
     }
-    acc[dirKey].services.push(curr);
-    acc[dirKey].total += curr.count;
+    
+    acc[dgaKey].directions[dirKey].services.push(curr);
+    acc[dgaKey].directions[dirKey].total += curr.count;
+    acc[dgaKey].directions[dirKey].active += (curr.activeCount || 0);
     return acc;
   }, {});
 
-  const sortedDirections = Object.values(groupedAssignments).sort((a: any, b: any) => b.total - a.total);
+  const sortedDgas = Object.values(dgaGroups).sort((a: any, b: any) => a.name.localeCompare(b.name));
+  sortedDgas.forEach((group: any) => {
+    group.sortedDirs = Object.values(group.directions).sort((a: any, b: any) => b.total - a.total);
+    group.total = group.sortedDirs.reduce((sum: number, dir: any) => sum + dir.total, 0);
+    group.active = group.sortedDirs.reduce((sum: number, dir: any) => sum + dir.active, 0);
+  });
 
   const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
@@ -418,35 +435,52 @@ export default function StatsCabinetPage() {
           <span className="px-3 py-1 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-xs font-black rounded-full uppercase tracking-widest">Hiérarchie Pôle</span>
         </div>
         
-        <div className="space-y-6">
-          {sortedDirections.map((dir: any, idx: number) => (
-            <div key={idx} className="border border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden bg-gray-50/30 dark:bg-gray-900/10">
-              <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
-                <div>
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{dir.name}</h3>
-                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">{dir.dga || 'Direction Générale'}</p>
+        <div className="space-y-10">
+          {sortedDgas.map((dga: any, dIdx: number) => (
+            <div key={dIdx} className="space-y-4">
+              <h3 className="text-base font-black text-gray-400 uppercase tracking-[0.2em] flex items-center justify-between gap-4 bg-gray-50/50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-4">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                  {dga.name}
                 </div>
-                <div className="bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm">
-                   <span className="text-sm font-black text-gray-900 dark:text-white">{dir.total}</span>
-                   <span className="text-[10px] text-gray-400 ml-1">docs</span>
+                <div className="text-xs font-black text-blue-500 bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-900/30 shadow-sm">
+                   {dga.total} <span className="font-medium text-blue-400">({dga.active})</span> <span className="text-[10px] opacity-70">TOTAL</span>
                 </div>
-              </div>
-              <div className="p-4 space-y-3">
-                {dir.services.map((svc: any, sIdx: number) => (
-                  <div key={sIdx} className="flex items-center gap-4 px-2">
-                    <div className="flex-1">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs font-semibold text-gray-600 dark:text-gray-300 italic">
-                          {svc.service || '(Affectations directes)'}
-                        </span>
-                        <span className="text-xs font-black text-gray-900 dark:text-white">{svc.count}</span>
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 gap-4">
+                {dga.sortedDirs.map((dir: any, idx: number) => (
+                  <div key={idx} className="border border-gray-100 dark:border-gray-700 rounded-2xl overflow-hidden bg-white dark:bg-gray-900/40 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="bg-gray-50/30 dark:bg-gray-800/30 px-6 py-4 flex justify-between items-center border-b border-gray-100 dark:border-gray-700">
+                      <div>
+                        <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-tight">{dir.name}</h4>
                       </div>
-                      <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
-                        <div 
-                          className="bg-blue-400 h-full rounded-full transition-all duration-1000" 
-                          style={{ width: `${dir.total ? (svc.count / dir.total) * 100 : 0}%` }}
-                        />
+                      <div className="bg-white dark:bg-gray-700 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm">
+                         <span className="text-sm font-black text-gray-900 dark:text-white">{dir.total} <span className="font-medium text-gray-400">({dir.active})</span></span>
+                         <span className="text-[10px] text-gray-400 ml-1 uppercase font-bold">docs</span>
                       </div>
+                    </div>
+                    <div className="p-4 space-y-3">
+                      {dir.services.map((svc: any, sIdx: number) => (
+                        <div key={sIdx} className="flex items-center gap-4 px-2">
+                          <div className="flex-1">
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 italic">
+                                {svc.service || '(Affectations directes)'}
+                              </span>
+                              <span className="text-xs font-black text-gray-900 dark:text-white">
+                                {svc.count} <span className="font-medium text-gray-400">({svc.activeCount || 0})</span>
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className="bg-blue-400 h-full rounded-full transition-all duration-1000" 
+                                style={{ width: `${dir.total ? (svc.count / dir.total) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}

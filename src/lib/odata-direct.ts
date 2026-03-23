@@ -8,6 +8,10 @@ let cachedTypes: any[] | null = null;
 let lastCacheUpdate: number = 0;
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+const TASK_TYPE_ID = 114; 
+const DGS_ID = 269;
+const DGS_LABEL = "DGS - Direction Générale des Services";
+
 export async function getODataConfig() {
   try {
     const dbConfig = await (prismaSystem as any).AppConfig.findUnique({
@@ -37,10 +41,8 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
     const nextY = m === 12 ? year + 1 : year;
     const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
     filter = `CreatedDate ge ${start} and CreatedDate lt ${end}`;
-  }
-
-  try {
-    const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,MediumId,TypeId,StateId,DirectionId`;
+  }  try {
+    const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`;
     let docs = await client.requestAll<any>(query);
 
     if (filters?.status && filters.status !== 'all') {
@@ -48,77 +50,60 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
       docs = docs.filter((d: any) => Number(d.StateId) === statusId);
     }
 
-    if (filters && (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
-      // Pour filtrer par pôle/direction/service, on utilise un créneau de tâches plus large (+15 jours) 
-      // pour capter les réaffectations qui arrivent après la création du doc.
-      const taskStart = filter.match(/ge ([^ ]+)/)?.[1] || `${year}-01-01T00:00:00Z`;
-      const docEnd = filter.match(/lt ([^ ]+)/)?.[1] || `${year + 1}-01-01T00:00:00Z`;
-      const taskEndDate = new Date(docEnd);
-      taskEndDate.setDate(taskEndDate.getDate() + 15);
-      const taskEnd = taskEndDate.toISOString();
+    // --- FILTRE ENTRANTS UNIQUEMENT (Itération 8) ---
+    docs = docs.filter((d: any) => d.DocumentIdentifier?.startsWith('ENT'));
 
-      const taskFilter = `RequestedDate ge ${taskStart} and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
-      
-      const [taskDocs, allPathsRaw] = await Promise.all([
-        client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber&$orderby=TaskNumber desc`),
-        (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) 
-          ? Promise.resolve(cachedPaths) 
-          : client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`)
-      ]);
+    // --- KPI MUNI (Itération 3) ---
+    // On limite les tâches à la période élargie pour attraper les correspondances Muni
+    const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-02-01T00:00:00Z and TaskProcessingTypeId eq 114`;
+    const [allTasks, allPathsRaw, allTypesRaw] = await Promise.all([
+      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
+      client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey`),
+      client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr")
+    ]);
 
-      // Update cache
-      if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-        cachedPaths = allPathsRaw;
-        lastCacheUpdate = Date.now();
-      }
+    const pm = new Map();
+    const pmFull = new Map();
+    const EXCLUDED_NAME = "ABBAS Isabelle";
+    
+    allPathsRaw.forEach((p: any) => {
+      // Vérification globale sur tous les niveaux pour exclure le nom
+      const isExcluded = ["Level2", "Level3", "Level4", "Level5", "Level6"].some(k => 
+        (p[k] || '').trim().toUpperCase().includes(EXCLUDED_NAME.toUpperCase())
+      );
+      if (isExcluded) return;
 
-      // Dédoublonnage des chemins
-      const pathMap = new Map();
-      allPathsRaw.forEach((p: any) => {
-        if (!pathMap.has(p.Id)) {
-          pathMap.set(p.Id, {
-            pole: p.Level2?.trim(),
-            dga: p.Level3?.trim(),
-            dir: p.Level4?.trim(),
-            service: p.Level5?.trim()
-          });
-        }
-      });
+      pm.set(p.Id, p.Level2?.trim());
+      pmFull.set(p.Id, p);
+    });
 
-      // Attribution Multi-Path
-      const docToPaths = new Map<number, any[]>();
-      
-      taskDocs.forEach((t: any) => {
-        const path = pathMap.get(t.AssignedToStructureElementId);
-        if (path) {
-           if (!docToPaths.has(t.DocumentId)) docToPaths.set(t.DocumentId, []);
-           docToPaths.get(t.DocumentId)!.push(path);
-        }
-      });
+    const d2t = new Map<number, number[]>();
+    allTasks.forEach((t: any) => {
+      if (!d2t.has(t.DocumentId)) d2t.set(t.DocumentId, []);
+      d2t.get(t.DocumentId)!.push(t.AssignedToStructureElementId);
+    });
 
-      const initialCount = docs.length;
-      docs = docs.filter((d: any) => {
-        const paths = docToPaths.get(d.Id);
-        if (!paths || paths.length === 0) return false; 
-        
-        return paths.some(path => {
-          if (filters.pole !== 'all' && path.pole !== filters.pole) return false;
-          if (filters.dga !== 'all' && path.dga !== filters.dga) return false;
-          if (filters.dir !== 'all' && path.dir !== filters.dir) return false;
-          if (filters.service !== 'all') {
-            if (filters.service === '(Affectations directes)') {
-              if (path.service) return false;
-            } else {
-              if (path.service !== filters.service) return false;
-            }
-          }
-          return true;
-        });
-      });
-      console.log(`[DEBUG STATS] Strict Task Filter: ${initialCount} -> ${docs.length}`);
-    }
+    const muniDocIds = new Set<number>();
+    docs.forEach((doc: any) => {
+      const tasks = d2t.get(doc.Id) || [];
+      const hasDGS = tasks.includes(DGS_ID);
+      const hasSubDGS = tasks.some(id => id !== DGS_ID && pm.get(id) === DGS_LABEL);
+      if (hasDGS && hasSubDGS) muniDocIds.add(doc.Id);
+    });
 
-    const totalTasks = 0; // Désactivé pour performance (Focus Courriers)
+    // --- FILTRE HIERARCHIQUE & REGLES (Itération 5) ---
+    const poleFilter = filters?.pole && filters.pole !== 'all' ? filters.pole : null;
+    const dgaFilter = filters?.dga && filters.dga !== 'all' ? filters.dga : null;
+    const dirFilter = filters?.dir && filters.dir !== 'all' ? filters.dir : null;
+    const serviceFilter = filters?.service && filters.service !== 'all' ? filters.service : null;
+
+    const assignedDocs = docs.filter(doc => d2t.has(doc.Id));
+    const unassignedDocs = docs.filter(doc => !d2t.has(doc.Id));
+    const muniDocs = docs.filter(d => muniDocIds.has(d.Id));
+
+    const totalDocs = docs.length;
+    const totalMuni = muniDocs.length;
+    const totalUnassigned = unassignedDocs.length;
 
     const isMonthly = !month || month === 'all';
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -141,13 +126,139 @@ export async function fetchStatsByFilters(year: number, month?: string, filters?
       }
     });
 
-    return {
-      totalDocs: docs.length,
-      totalTasks: totalTasks,
-      monthlyEvolution: chartData
+    let paperCount = 0;
+    let mailCount = 0;
+    let noResponseCount = 0;
+    let totalClosed = 0;
+    let delaysTotal = 0;
+    
+    // SLA Breakdown
+    let slaClosedWithin = 0;
+    let slaClosedExceeded = 0;
+    let slaActiveWithin = 0;
+    let slaActiveExceeded = 0;
+
+    const byNature: Record<string, number> = {};
+    const typeLabelToId = new Map(allTypesRaw.map((t: any) => [t.LabelFrFr, t.Id]));
+
+    docs.forEach((doc: any) => {
+      // Medium
+      if (Number(doc.MediumId) === 88) mailCount++;
+      else paperCount++;
+
+      // No Response (assuming State 0 or similar means no response, but better to use StateId logic if known)
+      // Actually, let's use the 'sans réponse' label if we had it, but here we'll assume StateId check
+      // In Elise, 'en cours' is often no response yet.
+      if (!doc.ClosedDate || doc.ClosedDate === 'null') noResponseCount++;
+
+      // Nature
+      const typeLabel = allTypesRaw.find((t: any) => t.Id === doc.TypeId)?.LabelFrFr || 'Autres';
+      byNature[typeLabel] = (byNature[typeLabel] || 0) + 1;
+
+      // SLA Logic
+      const isClosed = doc.ClosedDate && doc.ClosedDate !== 'null' && doc.ClosedDate !== '';
+      const created = new Date(doc.CreatedDate);
+      const end = isClosed ? new Date(doc.ClosedDate) : new Date();
+      const delayDays = Math.max(0, (end.getTime() - created.getTime()) / (1000 * 3600 * 24));
+      
+      const tasks = d2t.get(doc.Id) || [];
+      const matchingTasks = tasks.map(id => pmFull.get(id)).filter(Boolean);
+      const isDrh = matchingTasks.some(p => (p.Level4 || '').trim().toUpperCase().includes('RESSOURCES HUMAINES'));
+      const limit = isDrh ? 60 : 30;
+      const isWithinSla = delayDays <= limit;
+
+      if (isClosed) {
+        totalClosed++;
+        delaysTotal += delayDays;
+        if (isWithinSla) slaClosedWithin++;
+        else slaClosedExceeded++;
+      } else {
+        if (isWithinSla) slaActiveWithin++;
+        else slaActiveExceeded++;
+      }
+    });
+
+    const assignmentsMap = new Map<string, any>();
+    
+    docs.forEach((doc: any) => {
+      const taskElementIds = Array.from(d2t.get(doc.Id) || []);
+      const paths = taskElementIds.map(id => pmFull.get(id)).filter(Boolean);
+
+      // Pour chaque document, on identifie ses affectations uniques dans l'arborescence
+      // On regroupe par Direction, via une map temporaire pour appliquer la règle de disjonction (Anti-Redondance)
+      const docDirections = new Map<string, { dga: string, services: Set<string> }>();
+      
+      paths.forEach(p => {
+        const dir = (p.Level4 || '').trim();
+        if (!dir) return;
+
+        if (!docDirections.has(dir)) {
+          docDirections.set(dir, { dga: p.Level3 || '', services: new Set() });
+        }
+
+        const svc = (p.Level5 || '').trim();
+        const type = (p.StructureElementTypeKey || '').toUpperCase();
+        
+        if (svc) {
+           let svcName = svc;
+           if (type === 'USER' && (svc === dir || !svc)) {
+              const userName = (p.Level5 || p.Level6 || "Agent").trim();
+              svcName = (userName === dir) ? `${userName} (Individuel)` : userName;
+           }
+           docDirections.get(dir)!.services.add(svcName);
+        }
+      });
+
+      // Appliquer la règle : Si pas de service pour cette direction, alors c'est une affectation directe
+      const isClosed = doc.ClosedDate && doc.ClosedDate !== 'null' && doc.ClosedDate !== '';
+      
+      docDirections.forEach((info, dir) => {
+        if (info.services.size === 0) {
+           info.services.add('(Affectations directes)');
+        }
+        
+        info.services.forEach(svcName => {
+           const key = `${dir}|${info.dga}|${svcName}`;
+           if (!assignmentsMap.has(key)) {
+             assignmentsMap.set(key, { direction: dir, dga: info.dga, service: svcName, count: 0, activeCount: 0 });
+           }
+           const entry = assignmentsMap.get(key);
+           entry.count++;
+           if (!isClosed) entry.activeCount++;
+        });
+      });
+    });
+
+    const result: any = {
+      totalDocs: totalDocs,
+      paperCount,
+      mailCount,
+      noResponseCount,
+      avgDelay: totalClosed > 0 ? Math.round(delaysTotal / totalClosed) : 0,
+      totalMuni: totalMuni,
+      totalUnassigned: totalUnassigned,
+      monthlyEvolution: chartData,
+      byNature,
+      deadlines: {
+        closed: { within: slaClosedWithin, exceeded: slaClosedExceeded },
+        active: { within: slaActiveWithin, exceeded: slaActiveExceeded }
+      },
+      assignments: Array.from(assignmentsMap.values())
     };
+
+    if (totalDocs > 0 && totalDocs < 30) {
+      result.assignedIds = assignedDocs.map(d => d.DocumentIdentifier);
+    }
+    if (totalUnassigned > 0 && totalUnassigned < 30) {
+      result.unassignedIds = unassignedDocs.map(d => d.DocumentIdentifier);
+    }
+    if (totalMuni > 0 && totalMuni < 30) {
+      result.muniIds = muniDocs.map(d => d.DocumentIdentifier);
+    }
+
+    return result;
   } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchDirectStats:`, err.message);
+    console.error(`[OData-Direct] Error in fetchStatsByFilters:`, err.message);
     throw err;
   }
 }
@@ -177,7 +288,9 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     }
 
     // 2. On récupère les dimensions (États, Structure), les documents et les tâches
-    const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${endDate} and TaskProcessingTypeId eq 114`;
+    // --- UNIFICATION FENETRE TEMPORELLE (Iter 9) ---
+    // On utilise la même fenêtre que fetchStatsByFilters pour la cohérence (+1 mois de marge)
+    const tasksFilter = `RequestedDate ge ${startDate} and RequestedDate lt ${year + 1}-02-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
     
     const [yearDocs, statesRaw, allPathsRaw, taskDocs] = await Promise.all([
       client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,DirectionId`), 
@@ -202,7 +315,35 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       name: s.LabelFrFr || s.Label
     }));
 
-    // 4. Attribution Tâches - Permettre la multi-affectation
+    // 3. Identification des Muni (Itération 5)
+    const docToElementsAll: Record<number, Set<number>> = {};
+    const pm_hier = new Map();
+    const pmFullHier = new Map();
+    const EXCLUDED_NAME = "ABBAS Isabelle";
+    allPathsRaw.forEach((p: any) => {
+      const isExcluded = ["Level2", "Level3", "Level4", "Level5", "Level6"].some(k => 
+        (p[k] || '').trim().toUpperCase().includes(EXCLUDED_NAME.toUpperCase())
+      );
+      if (isExcluded) return;
+
+      pm_hier.set(p.Id, p.Level2?.trim());
+      pmFullHier.set(p.Id, p);
+    });
+
+    taskDocs.forEach((t: any) => {
+      if (!docToElementsAll[t.DocumentId]) docToElementsAll[t.DocumentId] = new Set();
+      docToElementsAll[t.DocumentId].add(t.AssignedToStructureElementId);
+    });
+
+    const muniDocIds = new Set<number>();
+    yearDocs.forEach((d: any) => {
+      const elIds = Array.from(docToElementsAll[d.Id] || []);
+      const hasDGS = elIds.includes(DGS_ID);
+      const hasSubDGS = elIds.some(id => id !== DGS_ID && pm_hier.get(id) === DGS_LABEL);
+      if (hasDGS && hasSubDGS) muniDocIds.add(d.Id);
+    });
+
+    // 4. Attribution Tâches - Permettre la multi-affectation (Itération 5)
     const docToElements: Record<number, Set<number>> = {};
     const yearDocIds = new Set(yearDocs.map((d: any) => d.Id));
     
@@ -214,8 +355,6 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
       }
     });
 
-    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElements: ${Object.keys(docToElements).length}`);
-
     // Dédoublonnage des chemins : un seul chemin par Id pour éviter le double comptage
     const allPaths: any[] = [];
     const seenElementIds = new Set<number>();
@@ -225,6 +364,8 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
         allPaths.push(p);
       }
     });
+
+    console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | docToElements: ${Object.keys(docToElements).length}`);
     
     // structurePaths inclut tous les éléments (SERVICE, USER, vide) pour montrer les 0 aussi
     const structurePaths = allPaths; // On ne filtre plus par type pour inclure individus et entités é 0
@@ -242,121 +383,103 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
     console.log(`[DEBUG COUNTS] yearDocIds: ${yearDocIds.size} | affected docs count: ${Object.keys(docToElements).length}`);
     const sampleIds = Array.from(yearDocIds).slice(0, 5);
     console.log(`[DEBUG COUNTS] sample yearDocIds: ${sampleIds.join(', ')}`);
-
     const getHierarchyWithCounts = (level: string, currentFilters?: any) => {
       const idsByName: Record<string, Set<number>> = {};
-      
-      // 1. Initialisation des noms basés sur la structure administrative
-      let validStructs = structurePaths;
-      if (currentFilters) {
-        if (currentFilters.pole && currentFilters.pole !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level2?.trim() === currentFilters.pole);
-        }
-        if (currentFilters.dga && currentFilters.dga !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level3?.trim() === currentFilters.dga);
-        }
-        if (currentFilters.dir && currentFilters.dir !== 'all') {
-          validStructs = validStructs.filter((p: any) => p.Level4?.trim() === currentFilters.dir);
-        }
-      }
-      
-      const validNames = new Set(validStructs.map((p: any) => (p[level] || '').trim()).filter(Boolean));
-      validNames.forEach(name => idsByName[name as string] = new Set());
-
-      // 2. AJOUT des catégories spéciales au niveau SERVICE (Level5)
-      if (level === 'Level5' && currentFilters?.dir && currentFilters.dir !== 'all') {
-        const directLabel = `(Affectations directes)`;
-        idsByName[directLabel] = new Set();
-        
-        allPaths.forEach((p: any) => {
-          if (p.Level4?.trim() === currentFilters.dir) {
-             const typeKey = (p.StructureElementTypeKey || '').toUpperCase();
-
-             // Cas 1: Affectation directe à la Direction (pas de Level5 → ID du service/direction lui-même)
-             if (!p.Level5) {
-                idsByName[directLabel].add(p.Id);
-             }
-             // Cas 2: Individus (USER ou type inconnu avec Level5/6 renseigné)
-             else if (typeKey === 'USER' || (typeKey !== 'SERVICE' && p.Level5)) {
-                const userName = (p.Level5 || p.Level6 || "Agent Individuel").trim();
-                const finalName = (userName === currentFilters.dir) ? `${userName} (Individuel)` : userName;
-                if (!idsByName[finalName]) idsByName[finalName] = new Set();
-                idsByName[finalName].add(p.Id);
-             }
-             // Cas 3: Services standards (Level5 + type SERVICE ou vide)
-             else if (p.Level5 && (typeKey === 'SERVICE' || typeKey === '')) {
-                const sName = p.Level5.trim();
-                if (!idsByName[sName]) idsByName[sName] = new Set();
-                idsByName[sName].add(p.Id);
-             }
-          }
-        });
-      } else {
-        // Logique standard pour Pôle, DGA, Direction
-        if (level === 'Level3' || level === 'Level4') {
-           idsByName['(Affectations directes)'] = new Set();
-        }
-        
-        allPaths.forEach(p => {
-          let name = (p[level] || '').trim();
-          if (!name && (level === 'Level3' || level === 'Level4')) {
-             name = '(Affectations directes)';
-          }
-
-          if (name && idsByName.hasOwnProperty(name)) {
-            let matches = true;
-            if (currentFilters) {
-              if (currentFilters.pole && currentFilters.pole !== 'all' && p.Level2?.trim() !== currentFilters.pole) matches = false;
-              if (currentFilters.dga && currentFilters.dga !== 'all' && p.Level3?.trim() !== currentFilters.dga) matches = false;
-              if (currentFilters.dir && currentFilters.dir !== 'all' && p.Level4?.trim() !== currentFilters.dir) matches = false;
-            }
-            if (matches && p.Id) {
-              idsByName[name].add(p.Id);
-            }
-          }
-        });
-      }
-
-      // 3. Calcul final des comptes uniques par entité avec PURGE des Affectations directes (Anti-Redondance Verticale)
-      const map: Record<string, number> = {};
       const directKey = '(Affectations directes)';
-      
-      const docsInSpecificEntities = new Set<number>();
-      const specificEntitiesMap: Record<string, Set<number>> = {};
-      let directDocsSet = new Set<number>();
+      const nextLevel = level === 'Level2' ? 'Level3' : (level === 'Level3' ? 'Level4' : (level === 'Level4' ? 'Level5' : 'Level6'));
 
-      Object.entries(idsByName).forEach(([name, idSet]) => {
-        const uniqueDocsInEntity = new Set<number>();
-        idSet.forEach(structId => {
-          if (countsByElementId[structId]) {
-            countsByElementId[structId].forEach(docId => {
-               uniqueDocsInEntity.add(docId);
-            });
-          }
-        });
+      // 1. Population des secteurs/noms basés sur les éléments structurels
+      allPaths.forEach(p => {
+        let name = (p[level] as string || '').trim();
         
-        if (name === directKey) {
-           directDocsSet = uniqueDocsInEntity;
-        } else {
-           specificEntitiesMap[name] = uniqueDocsInEntity;
-           uniqueDocsInEntity.forEach(id => docsInSpecificEntities.add(id));
+        // Filtres structurels
+        let matches = true;
+        if (currentFilters) {
+          if (currentFilters.pole && currentFilters.pole !== 'all' && (p.Level2 || '').trim() !== currentFilters.pole) matches = false;
+          if (currentFilters.dga && currentFilters.dga !== 'all' && (p.Level3 || '').trim() !== currentFilters.dga) matches = false;
+          if (currentFilters.dir && currentFilters.dir !== 'all' && (p.Level4 || '').trim() !== currentFilters.dir) matches = false;
+        }
+        if (!matches) return;
+
+        if (!name) {
+          if (level === 'Level3' || level === 'Level5') {
+            name = directKey;
+          } else return;
+        }
+
+        // Cas Agents spécifiques (Individuels)
+        if (level !== 'Level5' && (p.StructureElementTypeKey || '').toUpperCase() === 'USER') {
+           const parentLevel = level === 'Level4' ? 'Level3' : (level === 'Level3' ? 'Level2' : null);
+           if (parentLevel) {
+              const parentName = (p[parentLevel] as string || '').trim();
+              if (!p[level] || (p[level] as string).trim() === parentName) {
+                 const userName = (p.Level5 || p.Level6 || "Agent").trim();
+                 name = (userName === parentName) ? `${userName} (Individuel)` : userName;
+              }
+           }
+        }
+
+        if (name) {
+          if (!idsByName[name]) idsByName[name] = new Set();
+          idsByName[name].add(p.Id);
         }
       });
+
+      // 2. Calcul du décompte
+      const results: { name: string, count: number }[] = [];
       
-      // Affectations directes ne garde QUE les orphelins (Ceux qui n'ont aucune affectation plus spécifique au même niveau)
-      const filteredDirectDocs = new Set([...directDocsSet].filter(id => !docsInSpecificEntities.has(id)));
-      
-      // Alimentation Finale
-      if (filteredDirectDocs.size > 0) {
-        map[directKey] = filteredDirectDocs.size;
-      }
-      Object.entries(specificEntitiesMap).forEach(([name, uniqueSet]) => {
-        if (uniqueSet.size > 0) map[name] = uniqueSet.size;
+      Object.entries(idsByName).forEach(([name, idSet]) => {
+        const uniqueDocsUnderName = new Set<number>();
+        idSet.forEach(eid => {
+          if (countsByElementId[eid]) {
+            countsByElementId[eid].forEach(docId => uniqueDocsUnderName.add(docId));
+          }
+        });
+
+        // --- REGLE DE SOUSTRACTION (Anti-Redondance Verticale) ---
+        // L'utilisateur demande de soustraire uniquement pour le niveau Service (Pôle, DGA et Direction restent en total brut)
+        if (level === 'Level5') {
+            const netDocs = new Set<number>();
+            uniqueDocsUnderName.forEach(docId => {
+              const allDocElements = Array.from(docToElements[docId] || []);
+              const hasSubAssignment = allDocElements.some(eid => {
+                const p = pmFullHier.get(eid);
+                if (!p) return false;
+                
+                // Détermination de l'appartenance à la branche parente
+                const parentLevel = level === 'Level5' ? 'Level4' : (level === 'Level4' ? 'Level3' : (level === 'Level3' ? 'Level2' : null));
+                const matchesParent = !parentLevel || (p[parentLevel] as string || '').trim() === (currentFilters && currentFilters[parentLevel === 'Level4' ? 'dir' : (parentLevel === 'Level3' ? 'dga' : 'pole')] || '').trim();
+                
+                const matchesThisCategory = (p[level] as string || '').trim() === name;
+                const isDirectRow = name === directKey;
+                
+                if (isDirectRow) {
+                   if (!matchesParent) return false;
+                   return (p[level] as string || '').trim().length > 0;
+                }
+
+                if (!matchesThisCategory) return false;
+                const hasNext = p[nextLevel] && (p[nextLevel] as string).trim().length > 0;
+                const isUserUnderService = (p.StructureElementTypeKey || '').toUpperCase() === 'USER' && (level !== 'Level5' || p.Level6);
+                return hasNext || isUserUnderService;
+              });
+
+              if (!hasSubAssignment) {
+                netDocs.add(docId);
+              }
+            });
+            if (netDocs.size > 0 || name !== directKey) {
+              results.push({ name, count: netDocs.size });
+            }
+        } else {
+            // Level 2 (Pôle) et 3 (DGA) : décompte brut (somme)
+            if (uniqueDocsUnderName.size > 0) {
+              results.push({ name, count: uniqueDocsUnderName.size });
+            }
+        }
       });
-      
-      return Object.entries(map)
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .map(([name, count]) => ({ name, count }));
+
+      return results.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     };
 
     return {
@@ -373,256 +496,34 @@ export async function fetchDirectHierarchy(year: number, filters?: { pole: strin
 }
 
 export async function fetchCabinetEvolution(year: number, month?: string, filters?: any) {
-  const config = await getODataConfig();
-  if (!config?.baseUrl) throw new Error('OData config missing');
-  const client = new ODataClient(config);
-
-  try {
-    const isMonthly = !month || month === 'all';
-    let docFilter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z`;
-    if (!isMonthly) {
-      const m = parseInt(month || '1');
-      const start = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
-      const nextM = m === 12 ? 1 : m + 1;
-      const nextY = m === 12 ? year + 1 : year;
-      const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-      docFilter = `CreatedDate ge ${start} and CreatedDate lt ${end}`;
-    }
-
-    // Provision de tâches beaucoup plus large (+6 mois de N+1) pour capter les affectations tardives
-    const taskEnd = new Date(year + 1, 5, 1).toISOString(); // 1er Juin N+1
-    const taskFilter = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${taskEnd} and TaskProcessingTypeId eq 114`;
-
-    // DEBUG DUMP TASK TYPES
-    const taskTypesRaw = await client.requestAll<any>("DimTaskProcessingType?$select=Id,LabelFrFr");
-    require('fs').writeFileSync('c:/dev/Stat_Elise_New/tasktypes.json', JSON.stringify(taskTypesRaw, null, 2));
-
-    const [docsRaw, taskDocs, allPathsRaw, allTypesRaw] = await Promise.all([
-      client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilter)}&$select=Id,CreatedDate,ClosedDate,MediumId,TypeId,StateId`),
-      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilter)}&$select=DocumentId,AssignedToStructureElementId,TaskNumber`),
-      (cachedPaths && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedPaths) : client.requestAll<any>("DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey"),
-      (cachedTypes && Date.now() - lastCacheUpdate < CACHE_TTL) ? Promise.resolve(cachedTypes) : client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr")
-    ]);
-
-    // Update Cache
-    if (!cachedPaths || Date.now() - lastCacheUpdate >= CACHE_TTL) {
-      cachedPaths = allPathsRaw;
-      cachedTypes = allTypesRaw;
-      lastCacheUpdate = Date.now();
-    }
-
-    const pathMap = new Map();
-    allPathsRaw.forEach((p: any) => {
-      pathMap.set(p.Id, {
-        isMuni: p.Level2?.toUpperCase().includes('CABINET'),
-        pole: p.Level2?.trim(),
-        dga: p.Level3?.trim(),
-        dir: p.Level4?.trim(),
-        service: p.Level5?.trim(),
-        typeKey: p.StructureElementTypeKey?.toUpperCase() || ''
-      });
-    });
-
-    const typeMap = new Map();
-    allTypesRaw.forEach((t: any) => typeMap.set(t.Id, t.LabelFrFr));
-
-    // 2. Classification et Affectations
-    const docToTasks = new Map<number, any[]>();
-    const uniqueLevel2 = new Set<string>();
-    
-    taskDocs.forEach(t => {
-      const p = pathMap.get(t.AssignedToStructureElementId);
-      if (p?.pole) uniqueLevel2.add(p.pole);
-      
-      // Historique complet pour de multiples affectations
-      if (!docToTasks.has(t.DocumentId)) docToTasks.set(t.DocumentId, []);
-      docToTasks.get(t.DocumentId)?.push(t);
-    });
-
-    console.log(`[DEBUG CABINET] Unique Level2 found in Tasks:`, Array.from(uniqueLevel2));
-
-    let docs = docsRaw;
-    // Pré-filtrage global des documents (état et hiérarchie)
-    if (filters && (filters.status !== 'all' || filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all')) {
-      docs = docs.filter((doc: any) => {
-        // Filter by status
-        if (filters.status && filters.status !== 'all') {
-          const statusId = parseInt(filters.status);
-          if (doc.StateId !== statusId) return false;
-        }
-
-        // Filter by hierarchy (Si un document a AU MOINS UNE TACHE qui matche le filtre, on le garde)
-        if (filters.pole !== 'all' || filters.dga !== 'all' || filters.dir !== 'all' || filters.service !== 'all') {
-          const tasks = docToTasks.get(doc.Id) || [];
-          let hasMatchingTask = false;
-          for (const t of tasks) {
-            const path = pathMap.get(t.AssignedToStructureElementId);
-            if (path) {
-              let match = true;
-              if (filters.pole !== 'all' && path.pole !== filters.pole) match = false;
-              if (filters.dga !== 'all' && path.dga !== filters.dga) match = false;
-              if (filters.dir !== 'all' && path.dir !== filters.dir) match = false;
-              if (filters.service !== 'all') {
-                if (filters.service === '(Affectations directes)') {
-                   if (path.service) match = false;
-                } else {
-                   if (path.service !== filters.service) match = false;
-                }
-              }
-              if (match) hasMatchingTask = true;
-            }
-          }
-          if (!hasMatchingTask) return false;
-        }
-        return true;
-      });
-    }
-
-    const chartSize = isMonthly ? 12 : new Date(year, parseInt(month || '1'), 0).getDate();
-    const entrants = {
-      total: docs.length,
-      paperCount: 0,
-      mailCount: 0,
-      noResponseCount: 0,
-      muniCount: 0,
-      courantCount: 0,
-      sharedCount: 0,
-      byMonth: Array(chartSize).fill(0).map(() => ({ courriers: 0, courriels: 0 })),
-      byNature: {} as Record<string, number>,
-      deadlines: { 
-        closed: { within30: 0, within60: 0, exceeded: 0 },
-        active: { within30: 0, within60: 0, exceeded: 0 }
-      }
-    };
-
-    const assignmentsSet = new Map<string, any>();
-    let totalDelayDays = 0;
-    let closedCount = 0;
-
-    docs.forEach((doc: any) => {
-      const date = new Date(doc.CreatedDate);
-      const isEmail = Number(doc.MediumId) === 88;
-      const index = isMonthly ? date.getMonth() : date.getDate() - 1;
-      
-      // Basic Stats
-      if (index >= 0 && index < chartSize) {
-        if (isEmail) { entrants.byMonth[index].courriels++; entrants.mailCount++; }
-        else { entrants.byMonth[index].courriers++; entrants.paperCount++; }
-      }
-      if (doc.StateId !== 45 && doc.StateId !== 46) entrants.noResponseCount++;
-
-      // Nature (Thématique)
-      const nature = typeMap.get(doc.TypeId) || 'Autre';
-      entrants.byNature[nature] = (entrants.byNature[nature] || 0) + 1;
-
-      const tasks = docToTasks.get(doc.Id) || [];
-      let isMuni = false;
-      let isCourant = false;
-      
-      // La qualification Muni/Courant dépend de tout l'historique du document
-      tasks.forEach((t: any) => {
-        const p = pathMap.get(t.AssignedToStructureElementId);
-        if (p?.isMuni) isMuni = true;
-        if (p && !p.isMuni) isCourant = true;
-      });
-
-      const dirToServices = new Map<string, Map<string, any>>(); // dirName -> Map<serviceName, pathObj>
-      let dirToDirectPath = new Map<string, any>(); // dirName -> pathObj
-
-      tasks.forEach((t: any) => {
-        const path = pathMap.get(t.AssignedToStructureElementId);
-        if (path) {
-          let addIt = true;
-          if (filters) {
-            if (filters.pole !== 'all' && path.pole !== filters.pole) addIt = false;
-            if (filters.dga !== 'all' && path.dga !== filters.dga) addIt = false;
-            if (filters.dir !== 'all' && path.dir !== filters.dir) addIt = false;
-            if (filters.service !== 'all') {
-              if (filters.service === '(Affectations directes)' && path.service) addIt = false;
-              if (filters.service !== '(Affectations directes)' && path.service !== filters.service) addIt = false;
-            }
-          }
-          
-          if (addIt) {
-              const dirName = path.dir || '(Indéterminé)';
-              let serviceName = null;
-              
-              if (!path.service) {
-                 dirToDirectPath.set(dirName, path);
-              } 
-              else if (path.typeKey === 'USER' || (path.typeKey !== 'SERVICE' && path.service)) {
-                 const userName = path.service;
-                 serviceName = (userName === dirName) ? `${userName} (Individuel)` : userName;
-              }
-              else if (path.service && (path.typeKey === 'SERVICE' || path.typeKey === '')) {
-                 serviceName = path.service;
-              }
-
-              if (serviceName) {
-                 if (!dirToServices.has(dirName)) dirToServices.set(dirName, new Map());
-                 dirToServices.get(dirName)?.set(serviceName, path);
-              }
-          }
-        }
-      });
-
-      // Appliquer l'Anti-Redondance Verticale ET ajouter à assignmentsSet
-      Array.from(dirToServices.entries()).forEach(([dirName, servicesMap]) => {
-         Array.from(servicesMap.entries()).forEach(([svc, pathObj]) => {
-             const key = `${dirName}|${svc}`;
-             if (!assignmentsSet.has(key)) {
-                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: svc, count: 0 });
-             }
-             assignmentsSet.get(key).count++;
-         });
-      });
-
-      Array.from(dirToDirectPath.entries()).forEach(([dirName, pathObj]) => {
-         const services = dirToServices.get(dirName);
-         if (!services || services.size === 0) {
-             const key = `${dirName}|(Affectations directes)`;
-             if (!assignmentsSet.has(key)) {
-                assignmentsSet.set(key, { direction: pathObj.dir, dga: pathObj.dga, service: '(Affectations directes)', count: 0 });
-             }
-             assignmentsSet.get(key).count++;
+  // On réutilise fetchStatsByFilters pour le coeur des stats
+  const stats = await fetchStatsByFilters(year, month, filters);
+  
+  // La page cabinet v2 attend : { entrants, assignments, averageDelay }
+  return {
+    availableYears: [2026, 2025, 2024],
+    entrants: {
+      total: stats.totalDocs,
+      paperCount: stats.paperCount,
+      mailCount: stats.mailCount,
+      noResponseCount: stats.noResponseCount,
+      byNature: stats.byNature,
+      byMonth: stats.monthlyEvolution,
+      deadlines: {
+         // Projection pour le format attendu par StatsCabinet.tsx
+         closed: { 
+            within30: stats.deadlines.closed.within, // Note: fetchStatsByFilters doesn't split 30/60 anymore, it just does 'within'
+            within60: 0, 
+            exceeded: stats.deadlines.closed.exceeded 
+         },
+         active: { 
+            within30: stats.deadlines.active.within, 
+            within60: 0, 
+            exceeded: stats.deadlines.active.exceeded 
          }
-      });
-
-      if (isMuni && isCourant) entrants.sharedCount++;
-      else if (isMuni) entrants.muniCount++;
-      else if (isCourant) entrants.courantCount++;
-
-      // Delays (SLA)
-      if (doc.ClosedDate) {
-        const closed = new Date(doc.ClosedDate);
-        const diff = Math.ceil((closed.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0) {
-          totalDelayDays += diff;
-          closedCount++;
-          if (diff <= 30) entrants.deadlines.closed.within30++;
-          else if (diff <= 60) entrants.deadlines.closed.within60++;
-          else entrants.deadlines.closed.exceeded++;
-        }
-      } else if (doc.StateId !== 45 && doc.StateId !== 46) {
-        // En Cours
-        const today = new Date();
-        const diff = Math.ceil((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0) {
-          if (diff <= 30) entrants.deadlines.active.within30++;
-          else if (diff <= 60) entrants.deadlines.active.within60++;
-          else entrants.deadlines.active.exceeded++;
-        }
       }
-    });
-
-    return {
-      availableYears: [2026, 2025, 2024],
-      entrants,
-      assignments: Array.from(assignmentsSet.values()),
-      averageDelay: closedCount > 0 ? totalDelayDays / closedCount : 0
-    };
-  } catch (err: any) {
-    console.error(`[OData-Direct] Error in fetchCabinetStats:`, err.message);
-    throw err;
-  }
+    },
+    averageDelay: stats.avgDelay,
+    assignments: stats.assignments
+  };
 }
