@@ -56,7 +56,16 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     docs = docs.filter((d: any) => d.DocumentIdentifier?.startsWith('ENT'));
 
     // --- KPI MUNI (Itération 3) ---
-    const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-02-01T00:00:00Z and TaskProcessingTypeId eq 114`;
+    let taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
+    if (month && month !== 'all') {
+      const m = parseInt(month);
+      const start = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
+      const nextM = m === 12 ? 1 : m + 1;
+      const nextY = m === 12 ? year + 1 : year;
+      const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
+      taskFilterStr = `RequestedDate ge ${start} and RequestedDate lt ${end} and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
+    }
+
     const [allTasks, allPathsRaw, allTypesRaw, allStatusesRaw] = await Promise.all([
       client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
       client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey`),
@@ -92,7 +101,17 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       if (hasDGS && hasSubDGS) muniDocIds.add(doc.Id);
     });
 
-    // --- FILTRE HIERARCHIQUE & REGLES ---
+    // --- GLOBAL KPI CALCULATIONS (BEFORE HIERARCHY FILTER) ---
+    const allDocsForPeriod = [...docs];
+    const assignedDocsGlobal = allDocsForPeriod.filter(doc => d2t.has(doc.Id));
+    const unassignedDocsGlobal = allDocsForPeriod.filter(doc => !d2t.has(doc.Id));
+    const muniDocsGlobal = allDocsForPeriod.filter(d => muniDocIds.has(d.Id));
+
+    const totalDocs = allDocsForPeriod.length;
+    const totalMuni = muniDocsGlobal.length;
+    const totalUnassigned = unassignedDocsGlobal.length;
+
+    // --- FILTRE HIERARCHIQUE (POUR LES DETAILS UNIQUEMENT) ---
     const poleFilter = filters?.pole && filters.pole !== 'all' ? filters.pole : null;
     const dgaFilter = filters?.dga && filters.dga !== 'all' ? filters.dga : null;
     const dirFilter = filters?.dir && filters.dir !== 'all' ? filters.dir : null;
@@ -116,13 +135,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       });
     }
 
-    const assignedDocs = docs.filter(doc => d2t.has(doc.Id));
-    const unassignedDocs = docs.filter(doc => !d2t.has(doc.Id));
-    const muniDocs = docs.filter(d => muniDocIds.has(d.Id));
-
-    const totalDocs = docs.length;
-    const totalMuni = muniDocs.length;
-    const totalUnassigned = unassignedDocs.length;
+    const assignedDocsCount = docs.filter(doc => d2t.has(doc.Id)).length;
 
     const isMonthly = !month || month === 'all';
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -187,30 +200,74 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       }
     });
 
-    const assignmentsMap = new Map<string, any>();
+    const dgaAgg = new Map<string, { total: number, unclosed: number }>();
+    const dirAgg = new Map<string, { total: number, unclosed: number, dga: string }>();
+    const svcAgg = new Map<string, { total: number, unclosed: number, dga: string, dir: string }>();
+
     docs.forEach((doc: any) => {
       const taskElementIds = Array.from(d2t.get(doc.Id) || []);
       const paths = taskElementIds.map(id => pmFull.get(id)).filter(Boolean);
-      const docDirections = new Map<string, { dga: string, services: Set<string> }>();
       
+      const docDgas = new Set<string>();
+      const docDirs = new Set<string>();
+      const docSvcs = new Set<string>(); // key: dir|dga|svc
+      
+      const dirToHasService = new Map<string, boolean>();
+      const dirToDga = new Map<string, string>();
+      const svcToDir = new Map<string, {dir: string, dga: string}>();
+
       paths.forEach(p => {
+        const dga = (p.Level3 || '').trim();
         const dir = (p.Level4 || '').trim();
-        if (!dir) return;
-        if (!docDirections.has(dir)) docDirections.set(dir, { dga: p.Level3 || '', services: new Set() });
         const svc = (p.Level5 || '').trim();
-        if (svc) docDirections.get(dir)!.services.add(svc);
+        
+        if (dga) docDgas.add(dga);
+        if (dir) {
+          docDirs.add(dir);
+          dirToDga.set(dir, dga);
+          if (svc) {
+            dirToHasService.set(dir, true);
+            const svcKey = `${dir}|${dga}|${svc}`;
+            docSvcs.add(svcKey);
+            svcToDir.set(svcKey, { dir, dga });
+          }
+        }
+      });
+
+      // Special case: "(Affectations directes)" only if NO service in that direction
+      docDirs.forEach(dir => {
+         if (!dirToHasService.get(dir)) {
+            const dga = dirToDga.get(dir) || '';
+            const svcKey = `${dir}|${dga}|(Affectations directes)`;
+            docSvcs.add(svcKey);
+            svcToDir.set(svcKey, { dir, dga });
+         }
       });
 
       const isClosed = doc.ClosedDate && doc.ClosedDate !== 'null' && doc.ClosedDate !== '';
-      docDirections.forEach((info, dir) => {
-        if (info.services.size === 0) info.services.add('(Affectations directes)');
-        info.services.forEach(svcName => {
-           const key = `${dir}|${info.dga}|${svcName}`;
-           if (!assignmentsMap.has(key)) assignmentsMap.set(key, { direction: dir, dga: info.dga, service: svcName, count: 0, activeCount: 0 });
-           const entry = assignmentsMap.get(key);
-           entry.count++;
-           if (!isClosed) entry.activeCount++;
-        });
+
+      docDgas.forEach(dga => {
+        if (!dgaAgg.has(dga)) dgaAgg.set(dga, { total: 0, unclosed: 0 });
+        const agg = dgaAgg.get(dga)!;
+        agg.total++;
+        if (!isClosed) agg.unclosed++;
+      });
+
+      docDirs.forEach(dir => {
+        if (!dirAgg.has(dir)) dirAgg.set(dir, { total: 0, unclosed: 0, dga: dirToDga.get(dir) || '' });
+        const agg = dirAgg.get(dir)!;
+        agg.total++;
+        if (!isClosed) agg.unclosed++;
+      });
+
+      docSvcs.forEach(svcKey => {
+        if (!svcAgg.has(svcKey)) {
+          const info = svcToDir.get(svcKey)!;
+          svcAgg.set(svcKey, { total: 0, unclosed: 0, dga: info.dga, dir: info.dir });
+        }
+        const agg = svcAgg.get(svcKey)!;
+        agg.total++;
+        if (!isClosed) agg.unclosed++;
       });
     });
 
@@ -224,11 +281,19 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       noResponseCount,
       monthlyEvolution: chartData,
       byNature: Object.entries(byNature).map(([name, value]) => ({ name, value })).sort((a,b) => b.value - a.value).slice(0, 10),
-      byDirection: Array.from(assignmentsMap.values()),
       sla: {
         closed: { within: slaClosedWithin, exceeded: slaClosedExceeded },
         active: { within: slaActiveWithin, exceeded: slaActiveExceeded }
       },
+      byDga: Array.from(dgaAgg.entries()).map(([name, val]) => ({ name, ...val })),
+      byDirection: Array.from(dirAgg.entries()).map(([name, val]) => ({ name, ...val })),
+      byService: Array.from(svcAgg.entries()).map(([key, val]) => {
+        const [, , svc] = key.split('|');
+        return { name: svc, ...val };
+      }),
+      assignedIds: assignedDocsGlobal.slice(0, 50).map((d: any) => d.DocumentIdentifier),
+      unassignedIds: unassignedDocsGlobal.slice(0, 50).map((d: any) => d.DocumentIdentifier),
+      muniIds: muniDocsGlobal.slice(0, 50).map((d: any) => d.DocumentIdentifier),
       availableYears: [year - 1, year],
       statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
     };
@@ -243,41 +308,62 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const config = await getODataConfig();
   const client = new ODataClient(config);
 
-  const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and TaskProcessingTypeId eq 114`;
-  const [allTasksRaw, allPathsRaw, allStatusesRaw] = await Promise.all([
+  const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
+  // Fetch all "ENT" documents for the period first to get their IDs
+  const docFilterStr = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z and startswith(DocumentIdentifier, 'ENT')`;
+  
+  const [allDocsRaw, allTasksRaw, allPathsRaw, allStatusesRaw] = await Promise.all([
+    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id`),
     client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
     client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`),
     client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
   ]);
 
+  const relevantDocIds = new Set(allDocsRaw.map(d => d.Id));
   const pmFull = new Map();
   allPathsRaw.forEach((p: any) => { pmFull.set(p.Id, p); });
 
-  const assignments: any[] = [];
-  const assignedDocIds = new Set(allTasksRaw.map(t => t.DocumentId));
+  const poleMap = new Map<string, Set<number>>();
+  const dgaMap = new Map<string, Set<number>>();
+  const dirMap = new Map<string, Set<number>>();
+  const svcMap = new Map<string, Set<number>>();
 
   allTasksRaw.forEach((t: any) => {
+    if (!relevantDocIds.has(t.DocumentId)) return;
     const p = pmFull.get(t.AssignedToStructureElementId);
     if (p) {
-      assignments.push({
-        pole: p.Level2?.trim(),
-        dga: p.Level3?.trim(),
-        dir: p.Level4?.trim(),
-        service: p.Level5?.trim()
-      });
+      const pole = p.Level2?.trim();
+      const dga = p.Level3?.trim();
+      const dir = p.Level4?.trim();
+      const svc = p.Level5?.trim();
+
+      if (pole) {
+        if (!poleMap.has(pole)) poleMap.set(pole, new Set());
+        poleMap.get(pole)!.add(t.DocumentId);
+      }
+      
+      if (dga && (!filters.pole || filters.pole === 'all' || pole === filters.pole)) {
+        if (!dgaMap.has(dga)) dgaMap.set(dga, new Set());
+        dgaMap.get(dga)!.add(t.DocumentId);
+      }
+      
+      if (dir && (!filters.dga || filters.dga === 'all' || dga === filters.dga)) {
+        if (!dirMap.has(dir)) dirMap.set(dir, new Set());
+        dirMap.get(dir)!.add(t.DocumentId);
+      }
+      
+      if (svc && (!filters.dir || filters.dir === 'all' || dir === filters.dir)) {
+        if (!svcMap.has(svc)) svcMap.set(svc, new Set());
+        svcMap.get(svc)!.add(t.DocumentId);
+      }
     }
   });
 
-  const uniquePoles = Array.from(new Set(assignments.map(a => a.pole).filter(Boolean)));
-  const uniqueDgas = Array.from(new Set(assignments.filter(a => !filters.pole || filters.pole === 'all' || a.pole === filters.pole).map(a => a.dga).filter(Boolean)));
-  const uniqueDirs = Array.from(new Set(assignments.filter(a => !filters.dga || filters.dga === 'all' || a.dga === filters.dga).map(a => a.dir).filter(Boolean)));
-  const uniqueSvcs = Array.from(new Set(assignments.filter(a => !filters.dir || filters.dir === 'all' || a.dir === filters.dir).map(a => a.service).filter(Boolean)));
-
   return {
-    poles: uniquePoles.map(name => ({ name, count: assignments.filter(a => a.pole === name).length })),
-    dgas: uniqueDgas.map(name => ({ name, count: assignments.filter(a => a.dga === name).length })),
-    directions: uniqueDirs.map(name => ({ name, count: assignments.filter(a => a.dir === name).length })),
-    services: uniqueSvcs.map(name => ({ name, count: assignments.filter(a => a.service === name).length })),
+    poles: Array.from(poleMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
+    dgas: Array.from(dgaMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
+    directions: Array.from(dirMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
+    services: Array.from(svcMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
     statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
   };
 }

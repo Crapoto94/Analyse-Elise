@@ -185,16 +185,18 @@ export default function StatistiquesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {loading ? (
           <>
+            <div className="h-32 bg-slate-100 rounded-3xl animate-pulse" />
             <div className="h-32 bg-slate-100 rounded-3xl animate-pulse" />
             <div className="h-32 bg-slate-100 rounded-3xl animate-pulse" />
             <div className="h-32 bg-slate-100 rounded-3xl animate-pulse" />
           </>
         ) : (
           <>
-            <StatsCard title="Courriers Assignés" value={stats.totalDocs} icon="📄" color="blue" identifiers={stats.assignedIds} />
+            <StatsCard title="Total Entrants" value={stats.totalDocs} icon="📩" color="blue" />
+            <StatsCard title="Courriers Assignés" value={stats.assignedIds?.length || 0} icon="📄" color="blue" identifiers={stats.assignedIds} />
             <StatsCard title="Courriers Muni" value={stats.totalMuni} icon="🏛️" color="emerald" identifiers={stats.muniIds} />
             <StatsCard title="Non Attribués" value={stats.totalUnassigned} icon="❓" color="indigo" identifiers={stats.unassignedIds} />
           </>

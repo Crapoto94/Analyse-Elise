@@ -109,35 +109,47 @@ export default function StatsCabinetPage() {
 
   const monthlyData = data?.monthlyEvolution || [];
   const natureData = data?.byNature || [];
-  const assignments = data?.byDirection || [];
+  
+  const currentYear = new Date().getFullYear();
+  const allYears = Array.from({ length: currentYear - 2020 + 1 }, (_, i) => 2020 + i);
 
-  // Group assignments by DGA then Direction
+  const byDga = data?.byDga || [];
+  const byDirection = data?.byDirection || [];
+  const byService = data?.byService || [];
+
+  // Group pre-aggregated data by DGA then Direction
   const hierData: Record<string, any> = {};
-  assignments.forEach((a: any) => {
-    const dga = a.dga || 'Sans DGA';
-    if (!hierData[dga]) hierData[dga] = { name: dga, directions: {}, total: 0, totalUnclosed: 0 };
-    
-    if (!hierData[dga].directions[a.direction]) {
-       hierData[dga].directions[a.direction] = { name: a.direction, services: [], total: 0, unclosedCount: 0 };
-    }
-    hierData[dga].directions[a.direction].services.push(a);
-    hierData[dga].directions[a.direction].total += a.count;
-    hierData[dga].directions[a.direction].unclosedCount += a.activeCount;
-    
-    // Total DGA (On additionne les totaux par direction pour éviter les doubles comptages si plusieurs services)
-    // Mais ici assignments contient déjà les comptes par service.
+  
+  byDga.forEach((d: any) => {
+    hierData[d.name] = { name: d.name, total: d.total, totalUnclosed: d.unclosed, directions: {} };
   });
 
-  // Re-calculer les totaux DGA proprement
+  byDirection.forEach((d: any) => {
+    if (hierData[d.dga]) {
+      hierData[d.dga].directions[d.name] = { 
+        name: d.name, 
+        total: d.total, 
+        unclosedCount: d.unclosed, 
+        services: [] 
+      };
+    }
+  });
+
+  byService.forEach((s: any) => {
+    if (hierData[s.dga] && hierData[s.dga].directions[s.dir]) {
+      hierData[s.dga].directions[s.dir].services.push({ 
+        service: s.name, 
+        count: s.total, 
+        activeCount: s.unclosed 
+      });
+    }
+  });
+
+  // Sort services within each direction
   Object.values(hierData).forEach((dga: any) => {
-     let dgaTotal = 0;
-     let dgaUnclosed = 0;
      Object.values(dga.directions).forEach((dir: any) => {
-        dgaTotal += dir.total;
-        dgaUnclosed += dir.unclosedCount;
+        dir.services.sort((a: any, b: any) => b.count - a.count);
      });
-     dga.total = dgaTotal;
-     dga.totalUnclosed = dgaUnclosed;
   });
 
   const sortedDgas = Object.values(hierData).sort((a, b) => b.total - a.total);
@@ -160,7 +172,7 @@ export default function StatsCabinetPage() {
             onChange={(e) => setYear(Number(e.target.value))}
             className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
           >
-            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+            {allYears.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
 
           <select 
@@ -183,6 +195,37 @@ export default function StatsCabinetPage() {
             {availableStatuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
+      </div>
+
+      {/* Hierarchical Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-visible">
+        <FilterSelect 
+          label="Pôle" 
+          value={poleFilter} 
+          onChange={(v: string) => { setPoleFilter(v); setDgaFilter('all'); setDirFilter('all'); setServiceFilter('all'); }} 
+          options={poles} 
+        />
+        <FilterSelect 
+          label="DGA / Adjoint" 
+          value={dgaFilter} 
+          onChange={(v: string) => { setDgaFilter(v); setDirFilter('all'); setServiceFilter('all'); }} 
+          options={dgas} 
+          disabled={poleFilter === 'all'} 
+        />
+        <FilterSelect 
+          label="Direction" 
+          value={dirFilter} 
+          onChange={(v: string) => { setDirFilter(v); setServiceFilter('all'); }} 
+          options={directions} 
+          disabled={dgaFilter === 'all'} 
+        />
+        <FilterSelect 
+          label="Service" 
+          value={serviceFilter} 
+          onChange={setServiceFilter} 
+          options={services} 
+          disabled={dirFilter === 'all'} 
+        />
       </div>
 
       {/* KPI Cards Row */}
@@ -419,6 +462,27 @@ export default function StatsCabinetPage() {
         </div>
       </div>
 
+    </div>
+  );
+}
+
+function FilterSelect({ label, value, onChange, options, disabled }: any) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">{label}</label>
+      <select 
+        disabled={disabled}
+        value={value} 
+        onChange={(e) => onChange(e.target.value)}
+        className="px-3 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50 transition-all font-bold text-gray-700 dark:text-gray-200"
+      >
+        <option value="all">Tous les {label.toLowerCase()}s</option>
+        {options.map((opt: any) => (
+          <option key={opt.name} value={opt.name}>
+            {opt.name} ({opt.count.toLocaleString()})
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
