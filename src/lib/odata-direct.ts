@@ -273,6 +273,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
 
     return {
       totalDocs,
+      totalAssigned: assignedDocsGlobal.length,
       totalMuni,
       totalUnassigned,
       avgDelay: totalClosed > 0 ? Math.round(delaysTotal / totalClosed) : 0,

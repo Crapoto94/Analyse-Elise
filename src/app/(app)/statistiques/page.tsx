@@ -196,7 +196,7 @@ export default function StatistiquesPage() {
         ) : (
           <>
             <StatsCard title="Total Entrants" value={stats.totalDocs} icon="📩" color="blue" />
-            <StatsCard title="Courriers Assignés" value={stats.assignedIds?.length || 0} icon="📄" color="blue" identifiers={stats.assignedIds} />
+            <StatsCard title="Courriers Assignés" value={stats.totalAssigned || 0} icon="📄" color="blue" identifiers={stats.assignedIds} />
             <StatsCard title="Courriers Muni" value={stats.totalMuni} icon="🏛️" color="emerald" identifiers={stats.muniIds} />
             <StatsCard title="Non Attribués" value={stats.totalUnassigned} icon="❓" color="indigo" identifiers={stats.unassignedIds} />
           </>
