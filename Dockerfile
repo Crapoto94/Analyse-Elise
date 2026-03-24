@@ -39,8 +39,8 @@ COPY --from=builder /app/.next/static ./.next/static
 # Copy the Prisma schema required for migrations
 COPY --from=builder /app/prisma ./prisma
 
-# Natively install ONLY the Prisma CLI to ensure all dependencies (debug, engines, etc) are correctly bundled
-RUN npm install prisma@^6.19.2 --no-save
+# Natively install BOTH Prisma CLI and Client to ensure db push and auto-generation succeed without missing modules
+RUN npm install prisma@^6.19.2 @prisma/client@^6.19.2 --no-save
 
 EXPOSE 5002
 ENV PORT 5002
