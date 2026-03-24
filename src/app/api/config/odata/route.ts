@@ -29,6 +29,17 @@ export async function POST(req: Request) {
 
   try {
     const data = await req.json();
+    
+    // Fetch existing config to preserve password if not provided
+    const existingRecord = await prismaSystem.appConfig.findUnique({
+      where: { key: 'odata_config' }
+    });
+    
+    if (existingRecord && !data.password) {
+      const existingConfig = JSON.parse(existingRecord.value);
+      data.password = existingConfig.password;
+    }
+
     await prismaSystem.appConfig.upsert({
       where: { key: 'odata_config' },
       update: { value: JSON.stringify(data) },

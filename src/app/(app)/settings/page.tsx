@@ -549,7 +549,7 @@ function ConfigTab() {
                      </div>
                      <div className="space-y-3">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1 block">Mot de passe</label>
-                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-700 p-5 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-bold" />
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 dark:bg-gray-900/30 border border-gray-100 dark:border-gray-700 p-5 rounded-2xl text-xs outline-none focus:ring-4 focus:ring-blue-500/10 transition-all font-bold" placeholder="•••••••• (laissez vide pour conserver)" />
                      </div>
                   </div>
                </div>
