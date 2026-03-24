@@ -36,18 +36,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
-# Copy the Prisma schema required for migrations
+# Re-generate the Prisma client in the final image to ensure resolution matches the environment
+# We copy the schema and run generate again
 COPY --from=builder /app/prisma ./prisma
-
-# Copy the generated Prisma client (binary engines) - required by the compiled Next.js app
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
-
-# Install only the Prisma CLI for db push at startup
-RUN npm install prisma@6.19.2 --no-save
+RUN npx prisma generate
 
 EXPOSE 5002
 ENV PORT 5002
 ENV HOSTNAME 0.0.0.0
 
-CMD sh -c "node_modules/.bin/prisma db push --accept-data-loss --skip-generate && node server.js"
+# Using npx for the push to use the version from package.json
+CMD sh -c "npx prisma db push --accept-data-loss --skip-generate && node server.js"
