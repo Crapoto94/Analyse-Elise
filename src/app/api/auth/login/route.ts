@@ -11,22 +11,21 @@ export async function POST(req: Request) {
 
     const hashedPassword = hashPassword(password);
 
-    // DEBUG LOGS (Safe: no passwords printed)
-    const isAdminEmail = email === (process.env.ADMIN_EMAIL || 'admin@elise.local').trim().replace(/^["']|["']$/g, '');
-    const expectedHash = process.env.ADMIN_PASSWORD_HASH ? process.env.ADMIN_PASSWORD_HASH.trim().replace(/^["']|["']$/g, '') : hashPassword('admin123');
-    const isHashMatch = hashedPassword === expectedHash;
+    const user = await verifyUser(email, hashedPassword);
 
-    console.log(`[LOGIN DEBUG] Email: ${email} | IsAdminEmail: ${isAdminEmail} | IsHashMatch: ${isHashMatch} | EnvHashPresent: ${!!process.env.ADMIN_PASSWORD_HASH}`);
-
-    const isValid = await verifyUser(email, hashedPassword);
-
-    if (!isValid) {
+    if (!user) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
-    await createSession({ email: email, role: 'ADMIN' });
+    // Role casing normalization (ensure comparison works with Sidebar.tsx)
+    const normalizedRole = user.role.toUpperCase();
 
-    return NextResponse.json({ success: true, user: { email: email, role: 'ADMIN' } });
+    await createSession({ email: user.email, role: normalizedRole });
+
+    return NextResponse.json({ 
+      success: true, 
+      user: { email: user.email, role: normalizedRole } 
+    });
 
   } catch (error: any) {
     console.error('Login Error:', error);
