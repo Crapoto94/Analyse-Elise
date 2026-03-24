@@ -6,7 +6,7 @@ services:
     container_name: odata-stats-app
     restart: always
     ports:
-      - "5004:5004"
+      - "5002:5002"
     environment:
       - DATABASE_URL_SYSTEM=file:/app/prisma/system.db
       - ODATA_BASE_URL=https://ville-ivry94.illico.city/AppBI/odata/
@@ -17,13 +17,13 @@ services:
       - SESSION_SECURE=false
       - AUTH_SECRET=ivry-sur-seine-secret-key-2024
       - NODE_ENV=production
-      - PORT=5004
+      - PORT=5002
     command: >
       sh -c "npx prisma@6.19.2 db push --accept-data-loss --skip-generate && node server.js"
     volumes:
       - ./prisma:/app/prisma
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5004/api/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:5002/api/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

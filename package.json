@@ -3,9 +3,9 @@
   "version": "0.1.77",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 5004",
+    "dev": "next dev -p 5002",
     "build": "next build",
-    "start": "next start -p 5004",
+    "start": "next start -p 5002",
     "lint": "next lint"
   },
   "dependencies": {
