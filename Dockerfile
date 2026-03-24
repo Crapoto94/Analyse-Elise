@@ -37,13 +37,13 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 # Re-generate the Prisma client in the final image to ensure resolution matches the environment
-# We copy the schema and run generate again
+# We copy the schema and run generate again with the pinned version
 COPY --from=builder /app/prisma ./prisma
-RUN npx prisma generate
+RUN npx prisma@6.19.2 generate
 
 EXPOSE 5002
 ENV PORT 5002
 ENV HOSTNAME 0.0.0.0
 
 # Using npx for the push to use the version from package.json
-CMD sh -c "npx prisma db push --accept-data-loss --skip-generate && node server.js"
+CMD sh -c "npx prisma@6.19.2 db push --accept-data-loss --skip-generate && node server.js"
