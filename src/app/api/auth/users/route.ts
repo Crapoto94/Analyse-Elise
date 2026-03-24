@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prismaSystem } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
+import { hashPassword, getSession } from '@/lib/auth';
 
 export async function GET() {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const users = await prismaSystem.user.findMany({
       select: { id: true, email: true, role: true }
@@ -10,12 +13,14 @@ export async function GET() {
     return NextResponse.json(Array.isArray(users) ? users : []);
   } catch (err: any) {
     console.error("[API USERS] Error fetching users:", err);
-    // On renvoie un tableau vide plutôt qu'une erreur 500 pour éviter le crash client
     return NextResponse.json([]);
   }
 }
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const { email, password, role } = await req.json();
     const user = await prismaSystem.user.create({
@@ -32,6 +37,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const { id, password, role } = await req.json();
     const data: any = { role };
@@ -48,6 +56,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const { id } = await req.json();
     await prismaSystem.user.delete({ where: { id } });

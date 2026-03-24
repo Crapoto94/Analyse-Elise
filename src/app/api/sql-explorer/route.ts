@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prismaSystem } from "@/lib/prisma";
 import { logApiRequest } from "@/lib/audit";
+import { getSession } from "@/lib/auth";
 
 export async function GET(req: Request) {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  
   const start = Date.now();
   const { searchParams } = new URL(req.url);
   const table = searchParams.get("table");

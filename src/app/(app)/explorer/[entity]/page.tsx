@@ -17,22 +17,33 @@ export default function EntityPage({ params }: { params: Promise<{ entity: strin
   const info = getEntityInfo(entity);
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem('odata_config');
-    if (!savedConfig) {
-      router.push('/connect');
-      return;
-    }
+    const init = async () => {
+      try {
+        const resSession = await fetch('/api/auth/session');
+        const sessionJson = await resSession.json();
+        if (sessionJson.user?.role !== 'ADMIN') {
+           router.push('/statistiques');
+           return;
+        }
 
-    const odataConfig = JSON.parse(savedConfig);
-    setConfig(odataConfig);
+        const resConfig = await fetch('/api/config/odata');
+        if (!resConfig.ok) throw new Error('Configuration OData manquante');
+        const odataConfig = await resConfig.json();
+        setConfig(odataConfig);
 
-    let finalQuery = query;
-    if (info.defaultExpand && !finalQuery.includes('$expand')) {
-      const separator = finalQuery ? '&' : '';
-      finalQuery += `${separator}$expand=${info.defaultExpand}`;
-    }
+        let finalQuery = query;
+        if (info.defaultExpand && !finalQuery.includes('$expand')) {
+          const separator = finalQuery ? '&' : '';
+          finalQuery += `${separator}$expand=${info.defaultExpand}`;
+        }
 
-    fetchData(odataConfig, finalQuery);
+        fetchData(odataConfig, finalQuery);
+      } catch (err: any) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    init();
   }, [router, entity, query, info.defaultExpand]);
 
   const fetchData = async (odataConfig: ODataConfig, queryStr: string) => {

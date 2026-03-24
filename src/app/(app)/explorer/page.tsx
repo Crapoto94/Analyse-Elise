@@ -14,15 +14,29 @@ export default function ExplorerPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const savedConfig = localStorage.getItem('odata_config');
-    if (!savedConfig) { router.push('/connect'); return; }
+    const init = async () => {
+      try {
+        const resSession = await fetch('/api/auth/session');
+        const sessionJson = await resSession.json();
+        if (sessionJson.user?.role !== 'ADMIN') {
+           router.push('/statistiques');
+           return;
+        }
 
-    const odataConfig = JSON.parse(savedConfig);
-    setConfig(odataConfig);
+        const resConfig = await fetch('/api/config/odata');
+        if (!resConfig.ok) throw new Error('Impossible de charger la configuration OData');
+        const odataConfig = await resConfig.ok ? await resConfig.json() : null;
+        
+        if (!odataConfig || !odataConfig.baseUrl) {
+          setError('Configuration OData manquante sur le serveur.');
+          setLoading(false);
+          return;
+        }
 
-    const client = new ODataClient(odataConfig);
-    client.getCollections()
-      .then(async (res) => {
+        setConfig(odataConfig);
+
+        const client = new ODataClient(odataConfig);
+        const res = await client.getCollections();
         setCollections(res.value);
         setLoading(false);
 
@@ -33,8 +47,12 @@ export default function ExplorerPage() {
           } catch { /* silent */ }
         });
         await Promise.all(countPromises);
-      })
-      .catch(err => { setError(err.message); setLoading(false); });
+      } catch (err: any) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+    init();
   }, [router]);
 
   if (loading) {
@@ -54,12 +72,6 @@ export default function ExplorerPage() {
           <p className="text-slate-500 mt-1">{config?.baseUrl}</p>
         </div>
         <div className="flex gap-4 items-center">
-          <button
-            onClick={() => { localStorage.removeItem('odata_config'); router.push('/connect'); }}
-            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-red-600 transition-colors"
-          >
-            Déconnexion OData
-          </button>
         </div>
       </header>
 
@@ -67,7 +79,7 @@ export default function ExplorerPage() {
         <div className="max-w-7xl mx-auto p-8 rounded-2xl bg-red-50 border border-red-100 text-red-700">
           <h3 className="text-xl font-bold mb-2">Erreur de connexion</h3>
           <p className="italic">{error}</p>
-          <button onClick={() => router.push('/connect')} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-medium">Réessayer</button>
+          <button onClick={() => window.location.reload()} className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-medium">Réessayer</button>
         </div>
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-fade-in">

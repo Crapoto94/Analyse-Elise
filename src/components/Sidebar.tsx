@@ -54,15 +54,15 @@ export default function Sidebar() {
       href: '/explorer/courriers',
       description: 'Explorateur documents & tâches',
     },
-    {
+  ];
+
+  if (session?.role === 'ADMIN') {
+    navItems.push({
       label: 'Explorateur d\'Entités',
       icon: '🔍',
       href: '/explorer',
       description: 'Parcourir les données brutes',
-    },
-  ];
-
-  if (session?.role === 'ADMIN') {
+    });
     navItems.push({
       label: 'Paramètres',
       icon: '⚙️',

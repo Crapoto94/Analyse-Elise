@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prismaSystem } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     // Use raw query to bypass missing model in Prisma client (due to lock)
     const logs = await prismaSystem.$queryRawUnsafe(

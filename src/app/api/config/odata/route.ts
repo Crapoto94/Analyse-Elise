@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prismaSystem } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
 
 export async function GET() {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const config = await prismaSystem.appConfig.findUnique({
       where: { key: 'odata_config' }
@@ -20,6 +24,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const session = await getSession();
+  if (session?.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+
   try {
     const data = await req.json();
     await prismaSystem.appConfig.upsert({
