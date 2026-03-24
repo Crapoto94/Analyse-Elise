@@ -463,12 +463,19 @@ function ConfigTab() {
   const handleTest = async () => {
     setError(''); setTestSuccess(false); setTestLoading(true);
     try {
-      const client = new ODataClient({
-        baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
-        username,
-        password
+      const res = await fetch('/api/config/odata/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          baseUrl: baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`,
+          username,
+          password: password || undefined // Send undefined if empty to use DB password
+        })
       });
-      await client.getMetadata();
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
+      
       setTestSuccess(true);
     } catch (err: any) {
       setError(err.message);
