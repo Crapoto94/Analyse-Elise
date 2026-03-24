@@ -101,17 +101,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       if (hasDGS && hasSubDGS) muniDocIds.add(doc.Id);
     });
 
-    // --- GLOBAL KPI CALCULATIONS (BEFORE HIERARCHY FILTER) ---
-    const allDocsForPeriod = [...docs];
-    const assignedDocsGlobal = allDocsForPeriod.filter(doc => d2t.has(doc.Id));
-    const unassignedDocsGlobal = allDocsForPeriod.filter(doc => !d2t.has(doc.Id));
-    const muniDocsGlobal = allDocsForPeriod.filter(d => muniDocIds.has(d.Id));
-
-    const totalDocs = allDocsForPeriod.length;
-    const totalMuni = muniDocsGlobal.length;
-    const totalUnassigned = unassignedDocsGlobal.length;
-
-    // --- FILTRE HIERARCHIQUE (POUR LES DETAILS UNIQUEMENT) ---
+    // --- FILTRE HIERARCHIQUE (S'APPLIQUE DÉSORMAIS AUSSI AUX KPIs GLOBAUX DU TABLEAU) ---
     const poleFilter = filters?.pole && filters.pole !== 'all' ? filters.pole : null;
     const dgaFilter = filters?.dga && filters.dga !== 'all' ? filters.dga : null;
     const dirFilter = filters?.dir && filters.dir !== 'all' ? filters.dir : null;
@@ -135,7 +125,15 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
       });
     }
 
-    const assignedDocsCount = docs.filter(doc => d2t.has(doc.Id)).length;
+    const assignedDocsGlobal = docs.filter(doc => d2t.has(doc.Id));
+    const unassignedDocsGlobal = docs.filter(doc => !d2t.has(doc.Id));
+    const muniDocsGlobal = docs.filter(d => muniDocIds.has(d.Id));
+
+    const totalDocs = docs.length;
+    const totalMuni = muniDocsGlobal.length;
+    const totalUnassigned = unassignedDocsGlobal.length;
+
+    const assignedDocsCount = assignedDocsGlobal.length;
 
     const isMonthly = !month || month === 'all';
     const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
@@ -309,18 +307,33 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const config = await getODataConfig();
   const client = new ODataClient(config);
 
-  const taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
-  // Fetch all "ENT" documents for the period first to get their IDs
-  const docFilterStr = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z and startswith(DocumentIdentifier, 'ENT')`;
+  let taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
+  let docFilterStr = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z and startswith(DocumentIdentifier, 'ENT')`;
+  
+  if (filters?.month && filters.month !== 'all') {
+    const m = parseInt(filters.month);
+    const start = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
+    const nextM = m === 12 ? 1 : m + 1;
+    const nextY = m === 12 ? year + 1 : year;
+    const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
+    taskFilterStr = `RequestedDate ge ${start} and RequestedDate lt ${end} and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
+    docFilterStr = `CreatedDate ge ${start} and CreatedDate lt ${end} and startswith(DocumentIdentifier, 'ENT')`;
+  }
   
   const [allDocsRaw, allTasksRaw, allPathsRaw, allStatusesRaw] = await Promise.all([
-    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id`),
+    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id,StateId`),
     client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
     client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`),
     client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
   ]);
 
   const relevantDocIds = new Set(allDocsRaw.map(d => d.Id));
+  if (filters?.status && filters.status !== 'all') {
+    const statusId = parseInt(filters.status);
+    // Note: status filter on hierarchy counts is more complex, here we filter the doc set
+    // But we need StateId from docs, adding it to select
+  }
+
   const pmFull = new Map();
   allPathsRaw.forEach((p: any) => { pmFull.set(p.Id, p); });
 
@@ -329,8 +342,17 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const dirMap = new Map<string, Set<number>>();
   const svcMap = new Map<string, Set<number>>();
 
+  const statusId = filters?.status && filters.status !== 'all' ? parseInt(filters.status) : null;
+
   allTasksRaw.forEach((t: any) => {
     if (!relevantDocIds.has(t.DocumentId)) return;
+    
+    // Status filter
+    if (statusId) {
+      const doc = allDocsRaw.find(d => d.Id === t.DocumentId);
+      if (doc && Number(doc.StateId) !== statusId) return;
+    }
+
     const p = pmFull.get(t.AssignedToStructureElementId);
     if (p) {
       const pole = p.Level2?.trim();
