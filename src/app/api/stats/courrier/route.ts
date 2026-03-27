@@ -114,7 +114,7 @@ function processDailyStats(docs: any[], tasks: any[], year: string, month: strin
       const hasDGS = docTasks.some(t => t.AssignedToStructureElementId === DGS_ID);
       const hasOther = docTasks.some(t => t.AssignedToStructureElementId !== DGS_ID);
       const isMuni = hasDGS && hasOther;
-      const docLabel = doc.ExternalReference || doc.Title || `#${doc.Id}`;
+      const docLabel = doc.ChronoNumber || doc.ExternalReference || doc.Title || `#${doc.Id}`;
 
       if (isEmail) {
         stats.courriels.total++;
