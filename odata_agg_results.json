@@ -1,0 +1,32 @@
+[
+  {
+    "StateId": 44,
+    "MediumId": 86,
+    "Count": 196
+  },
+  {
+    "StateId": 45,
+    "MediumId": 86,
+    "Count": 379
+  },
+  {
+    "StateId": 46,
+    "MediumId": 86,
+    "Count": 7
+  },
+  {
+    "StateId": 44,
+    "MediumId": 88,
+    "Count": 827
+  },
+  {
+    "StateId": 45,
+    "MediumId": 88,
+    "Count": 530
+  },
+  {
+    "StateId": 46,
+    "MediumId": 88,
+    "Count": 4776
+  }
+]

@@ -1,0 +1,64 @@
+{
+  "states": [
+    {
+      "Id": -1,
+      "Key": "Unknown",
+      "Label": "Inconnu",
+      "LabelFrFr": "Inconnu",
+      "LabelEnGb": "Unknown",
+      "LabelArTn": "مجهول",
+      "LabelEnUs": "Unknown",
+      "LabelNlNl": "Onbekend"
+    },
+    {
+      "Id": 42,
+      "Key": "COURRIERS_ETATS_1",
+      "Label": "En préparation",
+      "LabelFrFr": "En préparation",
+      "LabelEnGb": "Preparation process",
+      "LabelArTn": "قيد الإعداد",
+      "LabelEnUs": "Preparation process",
+      "LabelNlNl": "In voorbereiding"
+    },
+    {
+      "Id": 43,
+      "Key": "COURRIERS_ETATS_2",
+      "Label": "Préparé",
+      "LabelFrFr": "Préparé",
+      "LabelEnGb": "Prepared",
+      "LabelArTn": "تم إعدادها",
+      "LabelEnUs": "Prepared",
+      "LabelNlNl": "Voorbereid"
+    },
+    {
+      "Id": 44,
+      "Key": "COURRIERS_ETATS_3",
+      "Label": "En circulation",
+      "LabelFrFr": "En circulation",
+      "LabelEnGb": "Ongoing",
+      "LabelArTn": "في طور الإنجاز",
+      "LabelEnUs": "Ongoing",
+      "LabelNlNl": "In omloop"
+    },
+    {
+      "Id": 45,
+      "Key": "COURRIERS_ETATS_4",
+      "Label": "Clôturé",
+      "LabelFrFr": "Clôturé",
+      "LabelEnGb": "Closed",
+      "LabelArTn": "منتهي",
+      "LabelEnUs": "Closed",
+      "LabelNlNl": "Afgesloten"
+    },
+    {
+      "Id": 46,
+      "Key": "COURRIERS_ETATS_5",
+      "Label": "Archivé",
+      "LabelFrFr": "Archivé",
+      "LabelEnGb": "Archived",
+      "LabelArTn": "مأرشفة",
+      "LabelEnUs": "Archived",
+      "LabelNlNl": "Gearchiveerd"
+    }
+  ]
+}

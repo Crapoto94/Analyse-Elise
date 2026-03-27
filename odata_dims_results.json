@@ -1,0 +1,376 @@
+{
+  "mediums": [
+    {
+      "Id": -1,
+      "Key": "Unknown",
+      "Label": "Inconnu",
+      "LabelFrFr": "Inconnu",
+      "LabelEnGb": "Unknown",
+      "LabelArTn": "مجهول",
+      "LabelEnUs": "Unknown",
+      "LabelNlNl": "Onbekend"
+    },
+    {
+      "Id": 83,
+      "Key": "COURRIERS_SUPPORT_1",
+      "Label": "Plans",
+      "LabelFrFr": "Plans",
+      "LabelEnGb": "Parcel",
+      "LabelArTn": "طرد بريدي",
+      "LabelEnUs": "Parcel",
+      "LabelNlNl": "Pakket"
+    },
+    {
+      "Id": 84,
+      "Key": "COURRIERS_SUPPORT_2",
+      "Label": "Cd",
+      "LabelFrFr": "Cd",
+      "LabelEnGb": "DVD, CD",
+      "LabelArTn": "قرص مرّن",
+      "LabelEnUs": "DVD, CD",
+      "LabelNlNl": "Dvd, cd"
+    },
+    {
+      "Id": 85,
+      "Key": "COURRIERS_SUPPORT_3",
+      "Label": "Formulaire",
+      "LabelFrFr": "Formulaire",
+      "LabelEnGb": "Maps",
+      "LabelArTn": "خريطة",
+      "LabelEnUs": "Maps",
+      "LabelNlNl": "Kaarten"
+    },
+    {
+      "Id": 86,
+      "Key": "SUPPORT_PAPIER",
+      "Label": "Papier",
+      "LabelFrFr": "Papier",
+      "LabelEnGb": "Paper document",
+      "LabelArTn": "مكتوب على الورق",
+      "LabelEnUs": "Paper document",
+      "LabelNlNl": "Papier"
+    },
+    {
+      "Id": 87,
+      "Key": "SUPPORT_FAX",
+      "Label": "Fax",
+      "LabelFrFr": "Fax",
+      "LabelEnGb": "Fax",
+      "LabelArTn": "فاكس",
+      "LabelEnUs": "Fax",
+      "LabelNlNl": "Fax"
+    },
+    {
+      "Id": 88,
+      "Key": "SUPPORT_COURRIEL",
+      "Label": "Email",
+      "LabelFrFr": "E-mail",
+      "LabelEnGb": "E-mail",
+      "LabelArTn": "بريد الإلكتروني",
+      "LabelEnUs": "E-mail",
+      "LabelNlNl": "E-mail"
+    },
+    {
+      "Id": 89,
+      "Key": "SUPPORT_SMS",
+      "Label": "SMS",
+      "LabelFrFr": "SMS",
+      "LabelEnGb": "SMS",
+      "LabelArTn": "رسالة قصيرة",
+      "LabelEnUs": "SMS",
+      "LabelNlNl": "Sms"
+    },
+    {
+      "Id": 90,
+      "Key": "SUPPORT_FORM_WEB",
+      "Label": "Formulaire Web",
+      "LabelFrFr": "Formulaire Web",
+      "LabelEnGb": "Web form",
+      "LabelArTn": "استمارة",
+      "LabelEnUs": "Web form",
+      "LabelNlNl": "Webformulier"
+    },
+    {
+      "Id": 91,
+      "Key": "SUPPORT_ELEC_EXCH",
+      "Label": "Echange électronique",
+      "LabelFrFr": "Echange électronique",
+      "LabelEnGb": "Digital exchange",
+      "LabelArTn": "تبادل إلكتروني",
+      "LabelEnUs": "Digital exchange",
+      "LabelNlNl": "Elektronische uitwisseling"
+    },
+    {
+      "Id": 92,
+      "Key": "SUPPORT_APPLICATION",
+      "Label": "Application",
+      "LabelFrFr": "Application",
+      "LabelEnGb": "Application",
+      "LabelArTn": "Application",
+      "LabelEnUs": "Application",
+      "LabelNlNl": "Software"
+    },
+    {
+      "Id": 93,
+      "Key": "O311_GEOREPORT",
+      "Label": "Demande Open311",
+      "LabelFrFr": "Demande Open311",
+      "LabelEnGb": "Open311 request",
+      "LabelArTn": "Demande Open311 - AR",
+      "LabelEnUs": "Open311 request",
+      "LabelNlNl": "Demande Open311 - NL"
+    },
+    {
+      "Id": 255,
+      "Key": "COURRIERS_SUPPORT_4",
+      "Label": "Catalogue",
+      "LabelFrFr": "Catalogue",
+      "LabelEnGb": null,
+      "LabelArTn": null,
+      "LabelEnUs": null,
+      "LabelNlNl": null
+    },
+    {
+      "Id": 256,
+      "Key": "COURRIERS_SUPPORT_5",
+      "Label": "Clé USB",
+      "LabelFrFr": "Clé USB",
+      "LabelEnGb": null,
+      "LabelArTn": null,
+      "LabelEnUs": null,
+      "LabelNlNl": null
+    },
+    {
+      "Id": 895,
+      "Key": "COURRIERS_SUPPORT_6",
+      "Label": "Autre",
+      "LabelFrFr": "Autre",
+      "LabelEnGb": null,
+      "LabelArTn": null,
+      "LabelEnUs": null,
+      "LabelNlNl": null
+    },
+    {
+      "Id": 901561,
+      "Key": "GRC_COLLECTE",
+      "Label": "Demande collectée",
+      "LabelFrFr": "Demande collectée",
+      "LabelEnGb": "Collected Request",
+      "LabelArTn": "طلبات مجمعة",
+      "LabelEnUs": "Collected Request",
+      "LabelNlNl": "Ingezamelde aanvraag"
+    },
+    {
+      "Id": 901562,
+      "Key": "GRC_REPONDEUR",
+      "Label": "Message répondeur",
+      "LabelFrFr": "Message répondeur",
+      "LabelEnGb": "Voice mail",
+      "LabelArTn": "رسالة صوتية",
+      "LabelEnUs": "Voice mail",
+      "LabelNlNl": "Bericht op antwoordapparaat"
+    },
+    {
+      "Id": 901563,
+      "Key": "GRC_ACCUEIL",
+      "Label": "Accueil physique",
+      "LabelFrFr": "Demande présentielle",
+      "LabelEnGb": "Face to face request",
+      "LabelArTn": "استقبال",
+      "LabelEnUs": "Face to face request",
+      "LabelNlNl": "Persoonlijk onderhoud"
+    },
+    {
+      "Id": 901564,
+      "Key": "GRC_ENTRETIEN_TEL",
+      "Label": "Entretien téléphonique",
+      "LabelFrFr": "Entretien téléphonique",
+      "LabelEnGb": "Telephone interview",
+      "LabelArTn": "مكالمة هاتفية",
+      "LabelEnUs": "Telephone interview",
+      "LabelNlNl": "Telefonisch onderhoud"
+    }
+  ],
+  "types": [
+    {
+      "Id": -1,
+      "Label": "Inconnu"
+    },
+    {
+      "Id": 103,
+      "Label": "Standard"
+    },
+    {
+      "Id": 244,
+      "Label": "Logement"
+    },
+    {
+      "Id": 245,
+      "Label": "Dérogation de toutes sortes"
+    },
+    {
+      "Id": 246,
+      "Label": "Candidature "
+    },
+    {
+      "Id": 247,
+      "Label": "Autorisations de toutes sortes sauf stationnement"
+    },
+    {
+      "Id": 248,
+      "Label": "Crèche (dde places-problèmes...)"
+    },
+    {
+      "Id": 249,
+      "Label": "Ecole - Collège - Lycée"
+    },
+    {
+      "Id": 250,
+      "Label": "Stationnement (ddes, problèmes...)"
+    },
+    {
+      "Id": 251,
+      "Label": "Finances_ Marché public"
+    },
+    {
+      "Id": 252,
+      "Label": "Elections"
+    },
+    {
+      "Id": 253,
+      "Label": "Plaintes_Réclamations de toutes sortes"
+    },
+    {
+      "Id": 254,
+      "Label": "Propreté"
+    },
+    {
+      "Id": 370,
+      "Label": "Reprise V5 Elise"
+    },
+    {
+      "Id": 183336,
+      "Label": "Autre Thématique"
+    },
+    {
+      "Id": 598325,
+      "Label": "DRH (autre que candidature)"
+    },
+    {
+      "Id": 901551,
+      "Label": "Divers"
+    },
+    {
+      "Id": 901552,
+      "Label": "Perturbation"
+    },
+    {
+      "Id": 901553,
+      "Label": "Evènements et Demande salles"
+    },
+    {
+      "Id": 901554,
+      "Label": "Lot de documents"
+    },
+    {
+      "Id": 901555,
+      "Label": "Demande citoyenne"
+    },
+    {
+      "Id": 901558,
+      "Label": "Actualité"
+    },
+    {
+      "Id": 1556685,
+      "Label": "Document entrant"
+    },
+    {
+      "Id": 1556686,
+      "Label": "Document sortant"
+    },
+    {
+      "Id": 1556687,
+      "Label": "Document interne"
+    },
+    {
+      "Id": 1556688,
+      "Label": "Prestation"
+    },
+    {
+      "Id": 1556689,
+      "Label": "Base de connaissance"
+    },
+    {
+      "Id": 1556690,
+      "Label": "Réponse Autorisations de toute sorte "
+    },
+    {
+      "Id": 1556691,
+      "Label": "Réponse Logement "
+    },
+    {
+      "Id": 1556692,
+      "Label": "Réponse à candidature"
+    },
+    {
+      "Id": 1556693,
+      "Label": "Réponse Ressources humaines "
+    },
+    {
+      "Id": 1556694,
+      "Label": "Réponse Stationnement "
+    },
+    {
+      "Id": 1556701,
+      "Label": "Réponse Plaintes Réclamations"
+    },
+    {
+      "Id": 1556702,
+      "Label": "Réponse Propreté"
+    },
+    {
+      "Id": 1556703,
+      "Label": "Réponse Autre Thématique"
+    },
+    {
+      "Id": 1663592,
+      "Label": "Evènements et Demande salles"
+    },
+    {
+      "Id": 1663625,
+      "Label": "Réponse Evènements et Demande salles"
+    },
+    {
+      "Id": 1663636,
+      "Label": "Réponse Crèche"
+    },
+    {
+      "Id": 1663641,
+      "Label": "Réponse Ecole Collège Lycée"
+    },
+    {
+      "Id": 1664923,
+      "Label": "Conventions de tous types"
+    },
+    {
+      "Id": 1664994,
+      "Label": "Réponse Dérogation"
+    },
+    {
+      "Id": 1664995,
+      "Label": "Réponse Finances_ Marché public"
+    },
+    {
+      "Id": 1664996,
+      "Label": "Réponse Elections"
+    },
+    {
+      "Id": 1665002,
+      "Label": "Réponse Conventions"
+    },
+    {
+      "Id": 1665011,
+      "Label": "Réponse Demande citoyenne"
+    }
+  ]
+}

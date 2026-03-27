@@ -54,6 +54,12 @@ export default function Sidebar() {
       href: '/explorer/courriers',
       description: 'Explorateur documents & tâches',
     },
+    {
+      label: 'Stats courrier',
+      icon: '📊',
+      href: '/stats-courrier',
+      description: 'Analyse du service courrier',
+    },
   ];
 
   if (session?.role === 'ADMIN') {

@@ -1,0 +1,24 @@
+{
+  "taskTypes": [
+    {
+      "Id": -1,
+      "Label": "Inconnu"
+    },
+    {
+      "Id": 114,
+      "Label": "Traitement"
+    },
+    {
+      "Id": 115,
+      "Label": "Pour information"
+    },
+    {
+      "Id": 116,
+      "Label": "Validation"
+    },
+    {
+      "Id": 117,
+      "Label": "Réponse"
+    }
+  ]
+}

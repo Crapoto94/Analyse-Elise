@@ -1,0 +1,88 @@
+{
+  "directions": [
+    {
+      "Id": -1,
+      "Key": "Unknown",
+      "Label": "Inconnu",
+      "LabelFrFr": "Inconnu",
+      "LabelEnGb": "Unknown",
+      "LabelArTn": "مجهول",
+      "LabelEnUs": "Unknown",
+      "LabelNlNl": "Onbekend"
+    },
+    {
+      "Id": 1,
+      "Key": "All",
+      "Label": "Tout",
+      "LabelFrFr": "Tout",
+      "LabelEnGb": "All",
+      "LabelArTn": "الجميع",
+      "LabelEnUs": "All",
+      "LabelNlNl": "Alles"
+    },
+    {
+      "Id": 2,
+      "Key": "Folder",
+      "Label": "Dossier",
+      "LabelFrFr": "Dossier",
+      "LabelEnGb": "Folder",
+      "LabelArTn": "مجلد",
+      "LabelEnUs": "Folder",
+      "LabelNlNl": "Dossier"
+    },
+    {
+      "Id": 3,
+      "Key": "InMail",
+      "Label": "Entrant",
+      "LabelFrFr": "Entrant",
+      "LabelEnGb": "Incoming",
+      "LabelArTn": "مجلد",
+      "LabelEnUs": "Incoming",
+      "LabelNlNl": "Inkomend"
+    },
+    {
+      "Id": 4,
+      "Key": "InternalMail",
+      "Label": "Interne",
+      "LabelFrFr": "Interne",
+      "LabelEnGb": "Internal",
+      "LabelArTn": "داخلي",
+      "LabelEnUs": "Internal",
+      "LabelNlNl": "Intern"
+    },
+    {
+      "Id": 5,
+      "Key": "OutGoingMail",
+      "Label": "Sortant",
+      "LabelFrFr": "Sortant",
+      "LabelEnGb": "Outgoing",
+      "LabelArTn": "صادر",
+      "LabelEnUs": "Outgoing",
+      "LabelNlNl": "Uitgaand"
+    },
+    {
+      "Id": 6,
+      "Key": "SignatureBook",
+      "Label": "Parapheur",
+      "LabelFrFr": "Parapheur",
+      "LabelEnGb": "Signature book",
+      "LabelArTn": "موقعة",
+      "LabelEnUs": "Signature book",
+      "LabelNlNl": "Parafeur"
+    }
+  ],
+  "agg": [
+    {
+      "DirectionId": 3,
+      "Count": 6682
+    },
+    {
+      "DirectionId": 4,
+      "Count": 3
+    },
+    {
+      "DirectionId": 5,
+      "Count": 30
+    }
+  ]
+}

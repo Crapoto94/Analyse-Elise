@@ -1,42 +1,25 @@
-const fs = require('fs');
-const path = require('path');
-const { PrismaClient: SystemClient } = require('./node_modules/@prisma/client/system');
-const { PrismaClient: EntitiesClient } = require('./node_modules/@prisma/client/entities');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 async function check() {
-  console.log('--- FINAL DATABASE AUDIT ---');
-  
-  const files = ['system.db', 'entities.db'];
-  for (const f of files) {
-    const p = path.join(process.cwd(), f);
-    if (fs.existsSync(p)) {
-      const stats = fs.statSync(p);
-      console.log(`[OK] Found ${f} (${(stats.size / 1024 / 1024).toFixed(2)} MB)`);
-    } else {
-      console.log(`[FAIL] ${f} NOT FOUND in root!`);
-    }
-  }
-
   try {
-    const sys = new SystemClient();
-    const ent = new EntitiesClient();
+    const configs = await prisma.appConfig.findMany();
+    console.log('AppConfig:', JSON.stringify(configs, null, 2));
     
-    const userCount = await sys.user.count();
-    const docCount = await ent.sync_FactDocument.count();
-    
-    console.log(`- System Users: ${userCount}`);
-    console.log(`- Entities Documents: ${docCount}`);
-    
-    if (docCount > 0) {
-      console.log('--- ALL DATA VERIFIED AND PRESENT ---');
-    } else {
-      console.log('--- ERROR: DATABASE EXISTS BUT IS EMPTY ---');
-    }
-    
-    await sys.$disconnect();
-    await ent.$disconnect();
+    const odata = await prisma.appConfig.findUnique({ where: { key: 'odata_config' } });
+    console.log('OData Config found:', !!odata);
+
+    console.log('Attempting to create a test record...');
+    const test = await prisma.appConfig.upsert({
+      where: { key: 'test_key' },
+      update: { value: 'test_value_' + Date.now() },
+      create: { key: 'test_key', value: 'test_value' }
+    });
+    console.log('Test record created/updated:', test);
   } catch (e) {
-    console.error('ERROR during audit:', e.message);
+    console.error('Error:', e.message);
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
