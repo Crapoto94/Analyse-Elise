@@ -3,12 +3,16 @@
 import { useState, useEffect } from 'react';
 
 interface CourrierStats {
+  date: string;
   courriels: {
     total: number;
     supprimes: number;
     enregistres: number;
     courant: number;
     municipalite: number;
+    ids?: string[];
+    courant_ids?: string[];
+    municipalite_ids?: string[];
   };
   papiers: {
     total: number;
@@ -16,7 +20,12 @@ interface CourrierStats {
     courant: number;
     municipalite: number;
     non_enregistres: number;
+    ids?: string[];
+    courant_ids?: string[];
+    municipalite_ids?: string[];
   };
+  total_recus: number;
+  total_enregistres: number;
 }
 
 export default function StatsCourrierPage() {
