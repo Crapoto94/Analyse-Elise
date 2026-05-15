@@ -1,6 +1,11 @@
 import { ODataClient } from './odata';
 import { prismaSystem } from './prisma';
 
+function isElu(name: string): boolean {
+  const n = name.toUpperCase();
+  return n.includes('ADJOINT') || n.includes('ELU') || n.includes('MAIRE') || n.includes('CONSEILLER MUNICIPAL');
+}
+
 // Cache mémoire pour les dimensions (Structure + États)
 let cachedPaths: any[] | null = null;
 let cachedStatuses: any[] | null = null;
@@ -410,54 +415,40 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const isEmail = Number(doc.MediumId) === 88;
     const isMuni = docHasDGS.has(doc.Id);
 
-    // Find all services involved (via tasks, creator, or direction field)
-    const seIds = Array.from(docToSeIds.get(doc.Id) || new Set<number>());
+    // Find all services involved via tasks
+    const taskSeIds = Array.from(docToSeIds.get(doc.Id) || new Set<number>());
     
-    // Always include the DirectionId and Creator as mapping points to ensure structural completeness
-    if (seIds.length === 0 && doc.CreatedByStructureElementId) {
-      seIds.push(Number(doc.CreatedByStructureElementId));
-    }
-    if (doc.DirectionId && !seIds.includes(Number(doc.DirectionId))) {
-      const dirId = Number(doc.DirectionId);
-      if (dirId !== 622) seIds.push(dirId);
-    }
+    // Fallback: use Creator/DirectionId ONLY when there are NO task-based assignments
+    const seIds = taskSeIds.length > 0 ? taskSeIds : (() => {
+      const fallback: number[] = [];
+      if (doc.CreatedByStructureElementId) fallback.push(Number(doc.CreatedByStructureElementId));
+      if (doc.DirectionId) {
+        const dirId = Number(doc.DirectionId);
+        if (dirId !== 622 && !fallback.includes(dirId)) fallback.push(dirId);
+      }
+      return fallback;
+    })();
 
-    // Filter out technical IDs that shouldn't be primary directions (like Support 622, Admin, etc.)
-    const technicalIds = [622, 1, 2]; // 622 is Support, 1/2 often Admin
+    // Filter out technical IDs (Support 622, Admin 1/2)
+    const technicalIds = [622, 1, 2];
     const filteredSeIds = seIds.filter(id => !technicalIds.includes(id));
+
+    // Exclude DGS root (269) if there are other real assignments
+    const nonDgsIds = filteredSeIds.filter(id => id !== DGS_ID);
+    const effectiveSeIds = nonDgsIds.length > 0 ? nonDgsIds : filteredSeIds;
 
     // Track if this doc was mapped to at least one direction
     let wasMapped = false;
 
-
-    // Inclusive mapping: add the document to EVERY unique organization unit it touches
+    // Map document to ALL organization units it touches (except DGS if others exist)
     const docPoles = new Set<string>();
     const docDgas = new Set<string>();
     const docDirs = new Set<string>();
-    const docSvcs = new Set<string>(); // key: svcName
+    const docSvcs = new Set<string>();
 
-    // Pick the most specific (deepest) assignment to avoid double-counting at the pôle level
-    let bestSid: number | null = null;
-    if (seIds.length > 0) {
-      const getDepth = (id: number) => {
-        const p = pmFull.get(id);
-        if (!p) return 0;
-        if (p.Level5) return 5;
-        if (p.Level4) return 4;
-        if (p.Level3) return 3;
-        if (p.Level2) return 2;
-        return 1;
-      };
-      
-      // Sort seIds by depth descending
-      const sortedSids = [...seIds].sort((a, b) => getDepth(b) - getDepth(a));
-      // Pick the deepest one that is not the DGS root (unless only 269 remains)
-      bestSid = sortedSids.find(id => id !== 269) || sortedSids[0];
-    }
-
-    if (bestSid !== null) {
-       const p = pmFull.get(bestSid);
-       const fallbackName = elementNamesMap.get(bestSid);
+    effectiveSeIds.forEach(sid => {
+       const p = pmFull.get(sid);
+       const fallbackName = elementNamesMap.get(sid);
        if (p || fallbackName) {
           let pole = p?.Level2?.trim() || 'Autres / Non classés';
           let dga = p?.Level3?.trim() || '(Rattachement Pôle Direct)';
@@ -468,19 +459,19 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
           if (!filters || !filters.pole || filters.pole === 'all' || pole === filters.pole) {
              docDgas.add(dga);
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
-                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(bestSid) === 'USER' ? 'Personne' : 'Entité', dga }));
+                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
                 if (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir) {
-                   let svcKey = svc || elementNamesMap.get(bestSid) || '(Affectations Directes Direction)';
+                   let svcKey = svc || elementNamesMap.get(sid) || '(Affectations Directes Direction)';
                    docSvcs.add(JSON.stringify({ 
                      name: svcKey, 
-                     type: elementTypesMap.get(bestSid) === 'USER' ? 'Personne' : 'Entité'
+                     type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité'
                    }));
                 }
              }
           }
           wasMapped = true;
        }
-    }
+    });
 
     const addToMap = (map: Map<string, any>, key: string, data?: any) => {
       if (!map.has(key)) {
