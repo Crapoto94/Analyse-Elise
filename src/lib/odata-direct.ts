@@ -445,13 +445,8 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
        const fallbackName = elementNamesMap.get(sid);
        if (p || fallbackName) {
           let pole = p?.Level2?.trim() || 'Autres / Non classés';
-          let dga = p?.Level3?.trim();
-          if (!dga && p?.Level4?.trim()) {
-             dga = p.Level4.trim();
-          }
-          if (!dga) dga = '(Rattachement Pôle / Direct)';
-          
-          let dir = p?.Level4?.trim() || fallbackName || '(Rattachement DGA / Direct)';
+          let dga = p?.Level3?.trim() || '(Rattachement Pôle Direct)';
+          let dir = p?.Level4?.trim() || fallbackName || '(Rattachement DGA Direct)';
           const svc = p?.Level5?.trim();
 
           docPoles.add(pole);
@@ -459,9 +454,12 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
              docDgas.add(dga);
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
                 docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
-                if (svc && (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir)) {
-                   let svcKey = svc;
-                   docSvcs.add(JSON.stringify({ name: svcKey, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité' }));
+                if (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir) {
+                   let svcKey = svc || '(Affectations Directes Direction)';
+                   docSvcs.add(JSON.stringify({ 
+                     name: svcKey, 
+                     type: svc ? (elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité') : 'Entité' 
+                   }));
                 }
              }
           }
@@ -508,7 +506,7 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
           if (!val.closureReasons.has(reasonLabel)) val.closureReasons.set(reasonLabel, new Set());
           val.closureReasons.get(reasonLabel).add(doc.Id);
         } else if (!isClosed) {
-          const label = 'Non clôturés';
+          const label = 'NC (Non clôturés)';
           if (!val.closureReasons.has(label)) val.closureReasons.set(label, new Set());
           val.closureReasons.get(label).add(doc.Id);
         }
@@ -537,7 +535,7 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
             entOtherMail: new Set(), entOtherPapier: new Set(),
             closureReasons: new Map(),
             type: 'Entité',
-            dga: '(Rattachement Pôle / Direct)'
+            dga: '(Rattachement Pôle Direct)'
         };
         if (!dirMap.has(fallbackDir)) dirMap.set(fallbackDir, val);
         if (isEnt) val.ent.add(doc.Id);
