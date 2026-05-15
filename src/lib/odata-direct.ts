@@ -422,15 +422,14 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const seIds = taskSeIds.length > 0 ? taskSeIds : (() => {
       const fallback: number[] = [];
       if (doc.CreatedByStructureElementId) fallback.push(Number(doc.CreatedByStructureElementId));
-      if (doc.DirectionId) {
-        const dirId = Number(doc.DirectionId);
-        if (dirId !== 622 && !fallback.includes(dirId)) fallback.push(dirId);
+      if (doc.DirectionId && !fallback.includes(Number(doc.DirectionId))) {
+        fallback.push(Number(doc.DirectionId));
       }
       return fallback;
     })();
 
-    // Filter out technical IDs (Support 622, Admin 1/2)
-    const technicalIds = [622, 1, 2];
+    // Filter out technical IDs (Admin 1/2)
+    const technicalIds = [1, 2];
     const filteredSeIds = seIds.filter(id => !technicalIds.includes(id));
 
     // Exclude DGS root (269) if there are other real assignments
