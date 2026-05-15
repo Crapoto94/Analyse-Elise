@@ -436,16 +436,43 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const nonDgsIds = filteredSeIds.filter(id => id !== DGS_ID);
     const effectiveSeIds = nonDgsIds.length > 0 ? nonDgsIds : filteredSeIds;
 
+    // To prevent double-counting within the same hierarchy branch (e.g. Direction + Service),
+    // group by Direction (Level4) and keep only the deepest assignment per Direction.
+    const getDepth = (id: number) => {
+      const p = pmFull.get(id);
+      if (!p) return 0;
+      if (p.Level5) return 5;
+      if (p.Level4) return 4;
+      if (p.Level3) return 3;
+      if (p.Level2) return 2;
+      return 1;
+    };
+
+    const sidsByDir = new Map<string, number[]>();
+    effectiveSeIds.forEach(sid => {
+       const p = pmFull.get(sid);
+       const fallbackName = elementNamesMap.get(sid);
+       if (p || fallbackName) {
+           const dir = p?.Level4?.trim() || fallbackName || '(Rattachement DGA Direct)';
+           if (!sidsByDir.has(dir)) sidsByDir.set(dir, []);
+           sidsByDir.get(dir)!.push(sid);
+       }
+    });
+
+    const bestSeIds = Array.from(sidsByDir.values()).map(sids => {
+       return sids.sort((a, b) => getDepth(b) - getDepth(a))[0];
+    });
+
     // Track if this doc was mapped to at least one direction
     let wasMapped = false;
 
-    // Map document to ALL organization units it touches (except DGS if others exist)
+    // Map document to ALL organization units it touches
     const docPoles = new Set<string>();
     const docDgas = new Set<string>();
     const docDirs = new Set<string>();
     const docSvcs = new Set<string>();
 
-    effectiveSeIds.forEach(sid => {
+    bestSeIds.forEach(sid => {
        const p = pmFull.get(sid);
        const fallbackName = elementNamesMap.get(sid);
        if (p || fallbackName) {
