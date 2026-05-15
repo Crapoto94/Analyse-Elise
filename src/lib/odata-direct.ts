@@ -34,6 +34,7 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
   const client = new ODataClient(config);
 
   let filter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z`;
+  filter += ` and StateId ne 46`;
   if (month && month !== 'all') {
     const m = parseInt(month);
     const start = `${year}-${m.toString().padStart(2, '0')}-01T00:00:00Z`;
@@ -42,6 +43,8 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
     filter = `CreatedDate ge ${start} and CreatedDate lt ${end}`;
   }
+  
+  filter += ` and StateId ne 46`;
 
   try {
     const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`;
@@ -307,8 +310,8 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const config = await getODataConfig();
   const client = new ODataClient(config);
 
-  let taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
-  let docFilterStr = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z and startswith(DocumentIdentifier, 'ENT')`;
+  let taskFilterStr = `RequestedDate ge ${year}-01-01T00:00:00Z and RequestedDate lt ${year + 1}-01-01T00:00:00Z`;
+  let docFilterStr = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${year + 1}-01-01T00:00:00Z and (startswith(DocumentIdentifier, 'ENT') or startswith(DocumentIdentifier, 'SOR')) and StateId ne 46`;
   
   if (filters?.month && filters.month !== 'all') {
     const m = parseInt(filters.month);
@@ -316,16 +319,24 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const nextM = m === 12 ? 1 : m + 1;
     const nextY = m === 12 ? year + 1 : year;
     const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-    taskFilterStr = `RequestedDate ge ${start} and RequestedDate lt ${end} and TaskProcessingTypeId eq ${TASK_TYPE_ID}`;
-    docFilterStr = `CreatedDate ge ${start} and CreatedDate lt ${end} and startswith(DocumentIdentifier, 'ENT')`;
+    taskFilterStr = `RequestedDate ge ${start} and RequestedDate lt ${end}`;
+    docFilterStr = `CreatedDate ge ${start} and CreatedDate lt ${end} and (startswith(DocumentIdentifier, 'ENT') or startswith(DocumentIdentifier, 'SOR')) and StateId ne 46`;
   }
   
-  const [allDocsRaw, allTasksRaw, allPathsRaw, allStatusesRaw] = await Promise.all([
-    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id,StateId`),
+  if (filters?.taskTypeId) {
+    taskFilterStr += ` and TaskProcessingTypeId eq ${filters.taskTypeId}`;
+  }
+  
+  const [allDocsRaw, allTasksRaw, allPathsRaw, allStatusesRaw, allClosureReasonsRaw, allElementsRaw] = await Promise.all([
+    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id,StateId,DocumentIdentifier,MediumId,CreatedByStructureElementId,ClosureReasonId,ClosedDate,DirectionId`),
     client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
     client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`),
-    client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
+    client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr"),
+    client.requestAll<any>("DimDocumentClosureReason?$select=Id,LabelFrFr"),
+    client.requestAll<any>("DimStructureElement?$select=Id,Name,StructureElementTypeKey")
   ]);
+
+  console.log(`[HIERARCHY] docs=${allDocsRaw.length}, tasks=${allTasksRaw.length}, closureReasons=${allClosureReasonsRaw.length}, elements=${allElementsRaw.length}`);
 
   const relevantDocIds = new Set(allDocsRaw.map(d => d.Id));
   if (filters?.status && filters.status !== 'all') {
@@ -334,59 +345,254 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     // But we need StateId from docs, adding it to select
   }
 
-  const pmFull = new Map();
-  allPathsRaw.forEach((p: any) => { pmFull.set(p.Id, p); });
-
-  const poleMap = new Map<string, Set<number>>();
-  const dgaMap = new Map<string, Set<number>>();
-  const dirMap = new Map<string, Set<number>>();
-  const svcMap = new Map<string, Set<number>>();
-
-  const statusId = filters?.status && filters.status !== 'all' ? parseInt(filters.status) : null;
-
-  allTasksRaw.forEach((t: any) => {
-    if (!relevantDocIds.has(t.DocumentId)) return;
-    
-    // Status filter
-    if (statusId) {
-      const doc = allDocsRaw.find(d => d.Id === t.DocumentId);
-      if (doc && Number(doc.StateId) !== statusId) return;
-    }
-
-    const p = pmFull.get(t.AssignedToStructureElementId);
-    if (p) {
-      const pole = p.Level2?.trim();
-      const dga = p.Level3?.trim();
-      const dir = p.Level4?.trim();
-      const svc = p.Level5?.trim();
-
-      if (pole) {
-        if (!poleMap.has(pole)) poleMap.set(pole, new Set());
-        poleMap.get(pole)!.add(t.DocumentId);
-      }
-      
-      if (dga && (!filters.pole || filters.pole === 'all' || pole === filters.pole)) {
-        if (!dgaMap.has(dga)) dgaMap.set(dga, new Set());
-        dgaMap.get(dga)!.add(t.DocumentId);
-      }
-      
-      if (dir && (!filters.dga || filters.dga === 'all' || dga === filters.dga)) {
-        if (!dirMap.has(dir)) dirMap.set(dir, new Set());
-        dirMap.get(dir)!.add(t.DocumentId);
-      }
-      
-      if (svc && (!filters.dir || filters.dir === 'all' || dir === filters.dir)) {
-        if (!svcMap.has(svc)) svcMap.set(svc, new Set());
-        svcMap.get(svc)!.add(t.DocumentId);
-      }
+  const pmFull = new Map<number, any>();
+  const EXCLUDED_NAME = "ABBAS Isabelle";
+  allPathsRaw.forEach((p: any) => {
+    const isExcluded = ["Level2", "Level3", "Level4", "Level5"].some(k => 
+      (p[k] || '').trim().toUpperCase().includes(EXCLUDED_NAME.toUpperCase())
+    );
+    if (!isExcluded) {
+      pmFull.set(Number(p.Id), p);
     }
   });
 
+  const poleMap = new Map<string, any>();
+  const dgaMap = new Map<string, any>();
+  const dirMap = new Map<string, any>();
+  const svcMap = new Map<string, any>();
+
+  const statusMap = new Map(allStatusesRaw.map((s: any) => [Number(s.Id), s.LabelFrFr]));
+  const closureReasonMap = new Map(allClosureReasonsRaw.map((r: any) => [Number(r.Id), r.LabelFrFr]));
+  const elementNamesMap = new Map(allElementsRaw.map((e: any) => [Number(e.Id), e.Name]));
+  const elementTypesMap = new Map(allElementsRaw.map((e: any) => [Number(e.Id), e.StructureElementTypeKey]));
+
+  const DGS_ID = 269;
+  const docInfoMap = new Map<number, { identifier: string, stateId: number, mediumId: number, hasDGS: boolean, creatorSeId: number | null, closureReasonId: number | null }>();
+  
+  // Track which documents are assigned to DGS
+  const docHasDGS = new Set<number>();
+  allTasksRaw.forEach((t: any) => {
+    if (t.AssignedToStructureElementId === DGS_ID) {
+      docHasDGS.add(t.DocumentId);
+    }
+  });
+
+  allDocsRaw.forEach((d: any) => {
+    docInfoMap.set(d.Id, { 
+      identifier: d.DocumentIdentifier, 
+      stateId: Number(d.StateId),
+      mediumId: Number(d.MediumId),
+      hasDGS: docHasDGS.has(d.Id),
+      creatorSeId: d.CreatedByStructureElementId ? Number(d.CreatedByStructureElementId) : null,
+      closureReasonId: d.ClosureReasonId ? Number(d.ClosureReasonId) : null,
+      isClosed: !!(d.ClosedDate && d.ClosedDate !== 'null')
+    });
+  });
+
+  // Map DocumentId -> Array of assigned StructureElementIds from tasks
+  const docToSeIds = new Map<number, Set<number>>();
+  allTasksRaw.forEach((t: any) => {
+    if (!docToSeIds.has(t.DocumentId)) docToSeIds.set(t.DocumentId, new Set());
+    docToSeIds.get(t.DocumentId)!.add(t.AssignedToStructureElementId);
+  });
+
+  const statusId = (filters && filters.status && filters.status !== 'all') ? parseInt(filters.status) : null;
+
+  // Grouping logic: iterate over all documents to ensure none are missed
+  allDocsRaw.forEach((doc: any) => {
+    const isEnt = doc.DocumentIdentifier?.startsWith('ENT');
+    const isSor = doc.DocumentIdentifier?.startsWith('SOR');
+    if (!isEnt && !isSor) return;
+
+    // Status filter
+    if (statusId && Number(doc.StateId) !== statusId) return;
+
+    const isEmail = Number(doc.MediumId) === 88;
+    const isMuni = docHasDGS.has(doc.Id);
+
+    // Find all services involved (via tasks, creator, or direction field)
+    const seIds = Array.from(docToSeIds.get(doc.Id) || new Set<number>());
+    
+    // Fallbacks (creator/direction) should ONLY be used if no specific task filter is requested
+    // This aligns with fetchCabinetEvolution which only looks at task-based assignments
+    if (!filters?.taskTypeId) {
+      if (seIds.length === 0 && doc.CreatedByStructureElementId) {
+        seIds.push(Number(doc.CreatedByStructureElementId));
+      }
+      // Always consider the DirectionId from the document itself as a possible mapping point
+      if (doc.DirectionId && !seIds.includes(Number(doc.DirectionId))) {
+        const dirId = Number(doc.DirectionId);
+        if (dirId !== 622) seIds.push(dirId);
+      }
+    }
+
+    // Filter out technical IDs that shouldn't be primary directions (like Support 622, Admin, etc.)
+    const technicalIds = [622, 1, 2]; // 622 is Support, 1/2 often Admin
+    const filteredSeIds = seIds.filter(id => !technicalIds.includes(id));
+
+    // Track if this doc was mapped to at least one direction
+    let wasMapped = false;
+
+
+    // Inclusive mapping: add the document to EVERY unique organization unit it touches
+    const docPoles = new Set<string>();
+    const docDgas = new Set<string>();
+    const docDirs = new Set<string>();
+    const docSvcs = new Set<string>(); // key: svcName
+
+    seIds.forEach(sid => {
+       const p = pmFull.get(sid);
+       const fallbackName = elementNamesMap.get(sid);
+       if (p || fallbackName) {
+          let pole = p?.Level2?.trim() || 'Autres / Non classés';
+          let dga = p?.Level3?.trim();
+          if (!dga && p?.Level4?.trim()) {
+             dga = p.Level4.trim();
+          }
+          if (!dga) dga = '(Rattachement Pôle / Direct)';
+          
+          let dir = p?.Level4?.trim() || fallbackName || '(Rattachement DGA / Direct)';
+          const svc = p?.Level5?.trim();
+
+          docPoles.add(pole);
+          if (!filters || !filters.pole || filters.pole === 'all' || pole === filters.pole) {
+             docDgas.add(dga);
+             if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
+                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
+                if (svc && (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir)) {
+                   let svcKey = svc;
+                   docSvcs.add(JSON.stringify({ name: svcKey, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité' }));
+                }
+             }
+          }
+          wasMapped = true;
+       }
+    });
+
+    const addToMap = (map: Map<string, any>, key: string, data?: any) => {
+      if (!map.has(key)) {
+        map.set(key, { 
+          ent: new Set(), sor: new Set(),
+          entMuniMail: new Set(), entMuniPapier: new Set(),
+          entOtherMail: new Set(), entOtherPapier: new Set(),
+          closureReasons: new Map(),
+          type: data?.type || 'Entité',
+          dga: data?.dga || 'Autres / Non classés'
+        });
+      }
+      const val = map.get(key)!;
+      if (data?.dga && map === dirMap) val.dga = data.dga;
+      if (data?.type && val.type !== 'Entité') val.type = data.type; 
+
+      if (isEnt) {
+        val.ent.add(doc.Id);
+        if (isMuni) {
+          if (isEmail) val.entMuniMail.add(doc.Id);
+          else val.entMuniPapier.add(doc.Id);
+        } else {
+          if (isEmail) val.entOtherMail.add(doc.Id);
+          else val.entOtherPapier.add(doc.Id);
+        }
+
+        const isClosed = !!(doc.ClosedDate && doc.ClosedDate !== 'null');
+        if (doc.ClosureReasonId && isClosed) {
+          let reasonLabel = closureReasonMap.get(Number(doc.ClosureReasonId)) || `Motif #${doc.ClosureReasonId}`;
+          const labelLower = reasonLabel.toLowerCase();
+          if (labelLower.includes('courriel')) reasonLabel = 'Courriel';
+          else if (labelLower.includes('courrier')) reasonLabel = 'Courrier';
+          else if (labelLower.includes('téléphone')) reasonLabel = 'Téléphone';
+          else if (labelLower.includes('fax')) reasonLabel = 'Fax';
+          else if (labelLower.includes('rdv') || labelLower.includes('rencontre') || labelLower.includes('entretien')) reasonLabel = 'RDV';
+          else if (labelLower.includes('auto')) reasonLabel = 'Auto';
+
+          if (!val.closureReasons.has(reasonLabel)) val.closureReasons.set(reasonLabel, new Set());
+          val.closureReasons.get(reasonLabel).add(doc.Id);
+        } else if (!isClosed) {
+          const label = 'Non clôturés';
+          if (!val.closureReasons.has(label)) val.closureReasons.set(label, new Set());
+          val.closureReasons.get(label).add(doc.Id);
+        }
+      }
+      if (isSor) val.sor.add(doc.Id);
+    };
+
+    docPoles.forEach(p => addToMap(poleMap, p));
+    docDgas.forEach(d => addToMap(dgaMap, d));
+    docDirs.forEach(js => {
+       const d = JSON.parse(js);
+       addToMap(dirMap, d.name, { type: d.type, dga: d.dga });
+    });
+    docSvcs.forEach(js => {
+       const d = JSON.parse(js);
+       addToMap(svcMap, d.name, { type: d.type });
+    });
+
+    // Fallback if truly not mapped
+    if (!wasMapped) {
+        let fallbackDir = doc.DirectionId ? (elementNamesMap.get(Number(doc.DirectionId)) || `Direction #${doc.DirectionId}`) : 'Autres / Non classés';
+        if (isElu(fallbackDir)) fallbackDir = 'ELUS';
+        const val = dirMap.has(fallbackDir) ? dirMap.get(fallbackDir)! : { 
+            ent: new Set(), sor: new Set(),
+            entMuniMail: new Set(), entMuniPapier: new Set(),
+            entOtherMail: new Set(), entOtherPapier: new Set(),
+            closureReasons: new Map(),
+            type: 'Entité',
+            dga: '(Rattachement Pôle / Direct)'
+        };
+        if (!dirMap.has(fallbackDir)) dirMap.set(fallbackDir, val);
+        if (isEnt) val.ent.add(doc.Id);
+        if (isSor) val.sor.add(doc.Id);
+    }
+  });
+
+  const formatEntry = ([name, val]: [string, any]) => {
+    const getIds = (set: Set<number>) => Array.from(set).map(id => docInfoMap.get(id)?.identifier).filter(Boolean);
+    
+    const closureReasons: any = {};
+    val.closureReasons.forEach((set: Set<number>, label: string) => {
+      closureReasons[label] = {
+        count: set.size,
+        ids: Array.from(set).map(id => docInfoMap.get(id)?.identifier).filter(Boolean)
+      };
+    });
+
+    return { 
+      name, 
+      type: val.type,
+      dga: val.dga,
+      count: val.ent.size + val.sor.size,
+      countEnt: val.ent.size,
+      countSor: val.sor.size,
+      entMuniMail: val.entMuniMail.size,
+      entMuniPapier: val.entMuniPapier.size,
+      entOtherMail: val.entOtherMail.size,
+      entOtherPapier: val.entOtherPapier.size,
+      entMuniTotal: val.entMuniMail.size + val.entMuniPapier.size,
+      entOtherTotal: val.entOtherMail.size + val.entOtherPapier.size,
+      // IDs for tooltips and downloads
+      idsEnt: getIds(val.ent),
+      idsSor: getIds(val.sor),
+      idsMuniMail: getIds(val.entMuniMail),
+      idsMuniPapier: getIds(val.entMuniPapier),
+      idsOtherMail: getIds(val.entOtherMail),
+      idsOtherPapier: getIds(val.entOtherPapier),
+      idsMuniTotal: getIds(new Set([...val.entMuniMail, ...val.entMuniPapier])),
+      idsOtherTotal: getIds(new Set([...val.entOtherMail, ...val.entOtherPapier])),
+      idsTotal: getIds(new Set([...val.ent, ...val.sor])),
+      closureReasons
+    };
+  };
+
   return {
-    poles: Array.from(poleMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
-    dgas: Array.from(dgaMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
-    directions: Array.from(dirMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
-    services: Array.from(svcMap.entries()).map(([name, set]) => ({ name, count: set.size })).sort((a,b) => b.count - a.count),
+    poles: Array.from(poleMap.entries()).map(formatEntry).sort((a,b) => a.name.localeCompare(b.name)),
+    dgas: Array.from(dgaMap.entries()).map(formatEntry).sort((a,b) => a.name.localeCompare(b.name)),
+    directions: Array.from(dirMap.entries()).map(formatEntry).sort((a,b) => {
+        // Sort by DGA first, then by Name
+        const dgaComp = (a.dga || '').localeCompare(b.dga || '');
+        if (dgaComp !== 0) return dgaComp;
+        return a.name.localeCompare(b.name);
+    }),
+    services: Array.from(svcMap.entries()).map(formatEntry).sort((a,b) => a.name.localeCompare(b.name)),
     statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
   };
 }

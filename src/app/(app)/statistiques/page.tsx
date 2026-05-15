@@ -41,7 +41,7 @@ export default function StatistiquesPage() {
     const init = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/hierarchy?year=${yearFilter}&month=${monthFilter}&status=${statusFilter}`);
+        const res = await fetch(`/api/hierarchy?year=${yearFilter}&month=${monthFilter}&status=${statusFilter}&taskTypeId=114`);
         const json = await res.json();
         setPoles(json.poles || []);
 
@@ -80,7 +80,8 @@ export default function StatistiquesPage() {
       const params = new URLSearchParams({ 
         year: yearFilter.toString(),
         month: monthFilter,
-        status: statusFilter
+        status: statusFilter,
+        taskTypeId: '114'
       });
       if (poleFilter !== 'all') params.set('pole', poleFilter);
       if (dgaFilter !== 'all') params.set('dga', dgaFilter);
@@ -245,7 +246,7 @@ function FilterSelect({ label, value, onChange, options, disabled }: any) {
         <option value="all">Tous les {label.toLowerCase()}s</option>
         {options.map((opt: any) => (
           <option key={opt.name} value={opt.name}>
-            {opt.name} ({opt.count.toLocaleString()})
+            {opt.name} ({(opt.countEnt || 0).toLocaleString()})
           </option>
         ))}
       </select>

@@ -14,11 +14,12 @@ export async function GET(req: Request) {
 
   const month = searchParams.get('month') || 'all';
   const status = searchParams.get('status') || 'all';
+  const taskTypeId = searchParams.get('taskTypeId');
 
   console.log(`[API-HIERARCHY] Calling for year ${year}, month ${month}, status ${status} (Filters: ${pole}, ${dga}, ${dir})...`);
 
   try {
-    const data = await fetchDirectHierarchy(year, { pole, dga, dir, month, status });
+    const data = await fetchDirectHierarchy(year, { pole, dga, dir, month, status, taskTypeId });
     await logApiRequest(`/api/hierarchy`, 'GET', 200, Date.now() - start);
     return NextResponse.json(data);
   } catch (err: any) {

@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     const client = new ODataClient(config);
 
     // 1. Fetch Documents
-    let docFilter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${parseInt(year) + 1}-01-01T00:00:00Z`;
+    let docFilter = `CreatedDate ge ${year}-01-01T00:00:00Z and CreatedDate lt ${parseInt(year) + 1}-01-01T00:00:00Z and StateId ne 46`;
     if (search) {
       docFilter += ` and contains(DocumentIdentifier, '${search}')`;
     }

@@ -38,7 +38,7 @@ export default function StatsCabinetPage() {
   const [availableStatuses, setAvailableStatuses] = useState<{id: number, name: string}[]>([]);
 
   // Hierarchy Filters State
-  const [poleFilter, setPoleFilter] = useState('DGS - Direction Générale des Services');
+  const [poleFilter, setPoleFilter] = useState('all');
   const [dgaFilter, setDgaFilter] = useState('all');
   const [dirFilter, setDirFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
@@ -66,7 +66,8 @@ export default function StatsCabinetPage() {
          status: status,
          pole: poleFilter,
          dga: dgaFilter,
-         dir: dirFilter
+         dir: dirFilter,
+         taskTypeId: '114'
       });
 
       const [res, hRes] = await Promise.all([
@@ -479,7 +480,7 @@ function FilterSelect({ label, value, onChange, options, disabled }: any) {
         <option value="all">Tous les {label.toLowerCase()}s</option>
         {options.map((opt: any) => (
           <option key={opt.name} value={opt.name}>
-            {opt.name} ({opt.count.toLocaleString()})
+            {opt.name} ({(opt.countEnt || 0).toLocaleString()})
           </option>
         ))}
       </select>

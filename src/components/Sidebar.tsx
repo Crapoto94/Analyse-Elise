@@ -60,6 +60,12 @@ export default function Sidebar() {
       href: '/stats-courrier',
       description: 'Analyse du service courrier',
     },
+    {
+      label: 'Entrants/Sortants',
+      icon: '↕️',
+      href: '/entrants-sortants',
+      description: 'Analyse des flux par direction',
+    },
   ];
 
   if (session?.role === 'ADMIN') {

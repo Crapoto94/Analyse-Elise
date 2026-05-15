@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   try {
     // 1. Fetch Documents for the period
     // DirectionId = 3 is "Entrant" (Incoming)
-    const docsFilter = `CreatedDate ge ${startDate} and CreatedDate le ${endDate} and DirectionId eq 3`;
+    const docsFilter = `CreatedDate ge ${startDate} and CreatedDate le ${endDate} and DirectionId eq 3 and StateId ne 46`;
     const docs = await client.requestAll(`FactDocument?$filter=${docsFilter}`);
 
     // 2. Fetch Tasks for these documents...
