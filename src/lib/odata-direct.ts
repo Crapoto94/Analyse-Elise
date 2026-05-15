@@ -436,11 +436,23 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const docDirs = new Set<string>();
     const docSvcs = new Set<string>(); // key: svcName
 
-    // Pick the most specific assignment to avoid double-counting at the pôle level
-    // Prioritize non-DGS (269) assignments if they exist
+    // Pick the most specific (deepest) assignment to avoid double-counting at the pôle level
     let bestSid: number | null = null;
     if (seIds.length > 0) {
-      bestSid = seIds.find(id => id !== 269) || seIds[0];
+      const getDepth = (id: number) => {
+        const p = pmFull.get(id);
+        if (!p) return 0;
+        if (p.Level5) return 5;
+        if (p.Level4) return 4;
+        if (p.Level3) return 3;
+        if (p.Level2) return 2;
+        return 1;
+      };
+      
+      // Sort seIds by depth descending
+      const sortedSids = [...seIds].sort((a, b) => getDepth(b) - getDepth(a));
+      // Pick the deepest one that is not the DGS root (unless only 269 remains)
+      bestSid = sortedSids.find(id => id !== 269) || sortedSids[0];
     }
 
     if (bestSid !== null) {
