@@ -413,17 +413,13 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     // Find all services involved (via tasks, creator, or direction field)
     const seIds = Array.from(docToSeIds.get(doc.Id) || new Set<number>());
     
-    // Fallbacks (creator/direction) should ONLY be used if no specific task filter is requested
-    // This aligns with fetchCabinetEvolution which only looks at task-based assignments
-    if (!filters?.taskTypeId) {
-      if (seIds.length === 0 && doc.CreatedByStructureElementId) {
-        seIds.push(Number(doc.CreatedByStructureElementId));
-      }
-      // Always consider the DirectionId from the document itself as a possible mapping point
-      if (doc.DirectionId && !seIds.includes(Number(doc.DirectionId))) {
-        const dirId = Number(doc.DirectionId);
-        if (dirId !== 622) seIds.push(dirId);
-      }
+    // Always include the DirectionId and Creator as mapping points to ensure structural completeness
+    if (seIds.length === 0 && doc.CreatedByStructureElementId) {
+      seIds.push(Number(doc.CreatedByStructureElementId));
+    }
+    if (doc.DirectionId && !seIds.includes(Number(doc.DirectionId))) {
+      const dirId = Number(doc.DirectionId);
+      if (dirId !== 622) seIds.push(dirId);
     }
 
     // Filter out technical IDs that shouldn't be primary directions (like Support 622, Admin, etc.)
@@ -455,10 +451,10 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
                 docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
                 if (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir) {
-                   let svcKey = svc || '(Affectations Directes Direction)';
+                   let svcKey = svc || elementNamesMap.get(sid) || '(Affectations Directes Direction)';
                    docSvcs.add(JSON.stringify({ 
                      name: svcKey, 
-                     type: svc ? (elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité') : 'Entité' 
+                     type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité'
                    }));
                 }
              }
