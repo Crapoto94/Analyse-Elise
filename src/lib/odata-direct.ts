@@ -436,9 +436,16 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const docDirs = new Set<string>();
     const docSvcs = new Set<string>(); // key: svcName
 
-    seIds.forEach(sid => {
-       const p = pmFull.get(sid);
-       const fallbackName = elementNamesMap.get(sid);
+    // Pick the most specific assignment to avoid double-counting at the pôle level
+    // Prioritize non-DGS (269) assignments if they exist
+    let bestSid: number | null = null;
+    if (seIds.length > 0) {
+      bestSid = seIds.find(id => id !== 269) || seIds[0];
+    }
+
+    if (bestSid !== null) {
+       const p = pmFull.get(bestSid);
+       const fallbackName = elementNamesMap.get(bestSid);
        if (p || fallbackName) {
           let pole = p?.Level2?.trim() || 'Autres / Non classés';
           let dga = p?.Level3?.trim() || '(Rattachement Pôle Direct)';
@@ -449,19 +456,19 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
           if (!filters || !filters.pole || filters.pole === 'all' || pole === filters.pole) {
              docDgas.add(dga);
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
-                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
+                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(bestSid) === 'USER' ? 'Personne' : 'Entité', dga }));
                 if (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir) {
-                   let svcKey = svc || elementNamesMap.get(sid) || '(Affectations Directes Direction)';
+                   let svcKey = svc || elementNamesMap.get(bestSid) || '(Affectations Directes Direction)';
                    docSvcs.add(JSON.stringify({ 
                      name: svcKey, 
-                     type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité'
+                     type: elementTypesMap.get(bestSid) === 'USER' ? 'Personne' : 'Entité'
                    }));
                 }
              }
           }
           wasMapped = true;
        }
-    });
+    }
 
     const addToMap = (map: Map<string, any>, key: string, data?: any) => {
       if (!map.has(key)) {
