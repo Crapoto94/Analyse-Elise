@@ -458,12 +458,14 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
           if (!filters || !filters.pole || filters.pole === 'all' || pole === filters.pole) {
              docDgas.add(dga);
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
-                docDirs.add(JSON.stringify({ name: dir, type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité', dga }));
+                const dirType = p?.Level4 ? 'Entité' : (elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité');
+                docDirs.add(JSON.stringify({ name: dir, type: dirType, dga }));
                 if (!filters || !filters.dir || filters.dir === 'all' || dir === filters.dir) {
                    let svcKey = svc || elementNamesMap.get(sid) || '(Affectations Directes Direction)';
+                   const svcType = svc ? 'Entité' : (elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité');
                    docSvcs.add(JSON.stringify({ 
                      name: svcKey, 
-                     type: elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité'
+                     type: svcType
                    }));
                 }
              }
