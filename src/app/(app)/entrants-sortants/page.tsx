@@ -160,7 +160,7 @@ export default function EntrantsSortantsPage() {
       : [];
 
     return (
-      <td className={`px-4 py-1 text-center border-l border-slate-100/50 ${bgColor} group/cell relative`}>
+      <td className={`px-2 py-0.5 text-center border-l border-slate-100/50 ${bgColor} group/cell relative ${type === 'Entrants' ? 'w-[100px]' : ''}`}>
         <div className="flex flex-col items-center justify-center gap-0.5">
           <span 
             className={`${isBold ? 'font-black' : 'font-bold'} ${textColor} cursor-help transition-transform hover:scale-110 whitespace-pre-line text-sm`}
@@ -206,7 +206,7 @@ export default function EntrantsSortantsPage() {
       : [];
 
     return (
-      <td className="px-4 py-5 text-center border-l border-white/10 bg-white/5 group/cell relative">
+      <td className={`px-2 py-1.5 text-center border-l border-white/10 bg-white/5 group/cell relative ${type === 'Total_Entrants' ? 'w-[100px]' : ''}`}>
         <div className="flex flex-col items-center justify-center gap-1">
           <span 
             className="text-xl font-black cursor-help transition-transform hover:scale-110 whitespace-pre-line"
@@ -257,7 +257,7 @@ export default function EntrantsSortantsPage() {
                       type="checkbox" 
                       className="sr-only peer" 
                       checked={showPeople} 
-                      onChange={(e) => setShowPeople(e.checked)} 
+                      onChange={(e) => setShowPeople(e.target.checked)} 
                    />
                    <div className="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </div>
@@ -333,30 +333,30 @@ export default function EntrantsSortantsPage() {
           <table className="w-full text-left border-collapse min-w-[1400px]">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th rowSpan={2} className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] w-[250px]">
+                <th rowSpan={2} className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] w-[250px]">
                   {selectedPole === 'all' ? 'Collectivité / Pôles' : (selectedDga === 'all' ? 'Pôle / DGA' : (selectedDir === 'all' ? 'DGA / Directions' : 'Direction / Services'))}
                 </th>
                 <th colSpan={7} className="px-4 py-3 text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] text-center border-l border-slate-100/50 bg-blue-50/20">
                   FLUX ENTRANTS (ENT)
                 </th>
-                <th rowSpan={2} className="px-6 py-5 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center border-l border-slate-100/50 bg-amber-50/10">
+                <th rowSpan={2} className="px-6 py-2 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center border-l border-slate-100/50 bg-amber-50/10">
                   SORTANTS (SOR)
                 </th>
               </tr>
               <tr className="bg-slate-50/30 border-b border-slate-100">
-                <th className="px-4 py-3 text-[9px] font-black text-blue-800 uppercase text-center border-l border-slate-100/50 bg-blue-100/10">TOTAL ENT</th>
-                <th className="px-4 py-3 text-[9px] font-black text-indigo-600 uppercase text-center border-l border-slate-100/30 bg-indigo-50/5">MUNI (Tot)</th>
-                <th className="px-4 py-3 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Mail)</th>
-                <th className="px-4 py-3 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Pap)</th>
-                <th className="px-4 py-3 text-[9px] font-black text-cyan-600 uppercase text-center border-l border-slate-100/30 bg-cyan-50/5">AUTRES (Tot)</th>
-                <th className="px-4 py-3 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Mail)</th>
-                <th className="px-4 py-3 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Pap)</th>
+                <th className="px-2 py-2 text-[9px] font-black text-blue-800 uppercase text-center border-l border-slate-100/50 bg-blue-100/10 w-[100px]">TOTAL ENT</th>
+                <th className="px-4 py-2 text-[9px] font-black text-indigo-600 uppercase text-center border-l border-slate-100/30 bg-indigo-50/5">MUNI (Tot)</th>
+                <th className="px-4 py-2 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Mail)</th>
+                <th className="px-4 py-2 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Pap)</th>
+                <th className="px-4 py-2 text-[9px] font-black text-cyan-600 uppercase text-center border-l border-slate-100/30 bg-cyan-50/5">AUTRES (Tot)</th>
+                <th className="px-4 py-2 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Mail)</th>
+                <th className="px-4 py-2 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Pap)</th>
               </tr>
             </thead>
             <tbody>
               {/* Main Total Row (Global or Direction) */}
               <tr className="border-b border-slate-100 bg-blue-600 text-white shadow-lg relative z-10">
-                <td className="px-6 py-5">
+                <td className="px-6 py-1.5">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-white text-sm font-bold backdrop-blur-md">
                       {selectedPole === 'all' ? '🏛️' : (selectedDga === 'all' ? 'P' : (selectedDir === 'all' ? 'DGA' : 'D'))}
@@ -378,7 +378,7 @@ export default function EntrantsSortantsPage() {
               {/* List of items */}
               {itemsWithCounts.filter(item => showPeople || item.type !== 'Personne').map((item: any) => (
                 <tr key={item.name} className="border-b border-slate-50 group hover:bg-slate-50/80 transition-all">
-                  <td className="px-6 py-1.5 pl-12">
+                  <td className="px-6 py-0.5 pl-12">
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
                         <div className={`w-1.5 h-1.5 rounded-full ${selectedDir === 'all' ? 'bg-blue-400' : 'bg-slate-300'} group-hover:scale-125 transition-transform`}></div>
