@@ -367,7 +367,7 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const elementTypesMap = new Map(allElementsRaw.map((e: any) => [Number(e.Id), e.StructureElementTypeKey]));
 
   const DGS_ID = 269;
-  const docInfoMap = new Map<number, { identifier: string, stateId: number, mediumId: number, hasDGS: boolean, creatorSeId: number | null, closureReasonId: number | null }>();
+  const docInfoMap = new Map<number, { identifier: string, stateId: number, mediumId: number, hasDGS: boolean, creatorSeId: number | null, closureReasonId: number | null, isClosed: boolean }>();
   
   // Track which documents are assigned to DGS
   const docHasDGS = new Set<number>();
