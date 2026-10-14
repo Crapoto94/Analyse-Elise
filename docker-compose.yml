@@ -7,6 +7,11 @@ services:
     restart: always
     ports:
       - "5002:5002"
+    # Variables propres au serveur (APM, Hub DSI, StudioRH, AD...) : fichier .env posé à côté de ce compose,
+    # non versionné. Modèle : env.example
+    env_file:
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL_SYSTEM=file:/app/prisma/system.db
       - ODATA_BASE_URL=https://ville-ivry94.illico.city/AppBI/odata/
@@ -22,6 +27,9 @@ services:
       sh -c "npx prisma@6.19.2 db push --accept-data-loss --skip-generate && node server.js"
     volumes:
       - ./prisma:/app/prisma
+      # Certificat de l'autorité de la Ville (pour joindre l'APM en HTTPS) : déposer ville-ca.pem dans ./certs
+      # puis renseigner VILLE_CA_FILE=/app/certs/ville-ca.pem dans .env
+      - ./certs:/app/certs:ro
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:5002/api/health" ]
       interval: 30s
