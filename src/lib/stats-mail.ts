@@ -75,6 +75,18 @@ export async function fetchHubOrganisation(): Promise<{ directions: string[]; se
   return { directions: j.directions || [], services: j.services || [], dirServicesMap: j.dirServicesMap || {} };
 }
 
+/** Mémoïsation courte (5 min) des appels au Hub DSI : l'annuaire change rarement, l'AD derrière est lent. */
+const HUB_TTL = 5 * 60 * 1000;
+const hubCache: Map<string, { t: number; p: Promise<any> }> = ((globalThis as any).__hubCache ||= new Map());
+function memo<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const hit = hubCache.get(key);
+  if (hit && Date.now() - hit.t < HUB_TTL) return hit.p;
+  const p = fn();
+  hubCache.set(key, { t: Date.now(), p });
+  p.catch(() => { if (hubCache.get(key)?.p === p) hubCache.delete(key); }); // pas de cache sur échec
+  return p;
+}
+
 export type Encadrant = {
   nom: string; prenom: string; email: string; poste: string;
   role: 'dg' | 'directeur' | 'responsable_service';
@@ -83,16 +95,18 @@ export type Encadrant = {
 export type Assistant = { displayName: string; email: string; direction: string };
 
 /** Encadrants du Hub DSI (directeurs, DG, responsables de service) — GET /api/admin/rh/encadrants. */
-export async function fetchHubEncadrants(): Promise<Encadrant[]> {
+export const fetchHubEncadrants = (): Promise<Encadrant[]> => memo('hub-encadrants', async () => {
   const j = await hubGet('/api/admin/rh/encadrants');
-  return Array.isArray(j) ? j : [];
-}
+  return Array.isArray(j) ? (j as Encadrant[]) : [];
+});
 
 /**
  * Assistants de direction : « groupe particulier » du Hub (liste ad hoc basée sur une liste AD),
  * « Secrétaires des Directions ». Le rattachement se fait par le champ department (libellé de direction).
  */
-export async function fetchHubAssistants(): Promise<Assistant[]> {
+export const fetchHubAssistants = (): Promise<Assistant[]> => memo('hub-assistants', fetchHubAssistantsRaw);
+
+async function fetchHubAssistantsRaw(): Promise<Assistant[]> {
   const g = await hubGet('/api/admin/rh/encadrants/custom-groups');
   const group = (g.groups || []).find((x: any) => /secr[ée]taires des directions/i.test(x.name));
   if (!group) return [];

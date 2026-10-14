@@ -17,6 +17,28 @@ const TASK_TYPE_ID = 114;
 const DGS_ID = 269;
 const DGS_LABEL = "DGS - Direction Générale des Services";
 
+// Cache mémoire des téléchargements OData (partagé entre requêtes, résiste au rechargement à chaud en dev)
+const RAW_TTL = 10 * 60 * 1000;
+const RAW_MAX_ENTRIES = 24;
+type CacheEntry = { t: number; p: Promise<any[]> };
+const rawCache: Map<string, CacheEntry> = ((globalThis as any).__eliseRawCache ||= new Map());
+
+function cachedFetch(key: string, fn: () => Promise<any[]>, refresh = false): Promise<any[]> {
+  const hit = rawCache.get(key);
+  if (!refresh && hit && Date.now() - hit.t < RAW_TTL) return hit.p;
+  const p = fn();
+  rawCache.set(key, { t: Date.now(), p });
+  // un téléchargement en échec ne doit pas rester en cache
+  p.catch(() => { if (rawCache.get(key)?.p === p) rawCache.delete(key); });
+  // borne mémoire : on retire les plus anciennes entrées
+  while (rawCache.size > RAW_MAX_ENTRIES) {
+    const oldest = rawCache.keys().next().value;
+    if (oldest === undefined) break;
+    rawCache.delete(oldest);
+  }
+  return p;
+}
+
 export async function getODataConfig() {
   try {
     const dbConfig = await (prismaSystem as any).AppConfig.findUnique({
@@ -335,13 +357,17 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     taskFilterStr += ` and TaskProcessingTypeId eq ${filters.taskTypeId}`;
   }
   
+  // Données brutes d'Elise mises en cache (10 min) : les changements de filtre (pôle, DGA, direction) et les
+  // appels répétés recalculent en mémoire sans retélécharger. `refresh` force un nouveau téléchargement.
+  // Les tableaux obtenus sont partagés : ne jamais les modifier sur place.
+  const refresh = !!filters?.refresh;
   const [allDocsRaw, allTasksRaw, allPathsRaw, allStatusesRaw, allClosureReasonsRaw, allElementsRaw] = await Promise.all([
-    client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id,StateId,DocumentIdentifier,MediumId,CreatedByStructureElementId,ClosureReasonId,ClosedDate,DirectionId`),
-    client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
-    client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`),
-    client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr"),
-    client.requestAll<any>("DimDocumentClosureReason?$select=Id,LabelFrFr"),
-    client.requestAll<any>("DimStructureElement?$select=Id,Name,StructureElementTypeKey")
+    cachedFetch(`docs|${docFilterStr}`, () => client.requestAll<any>(`FactDocument?$filter=${encodeURIComponent(docFilterStr)}&$select=Id,StateId,DocumentIdentifier,MediumId,CreatedByStructureElementId,ClosureReasonId,ClosedDate,DirectionId`), refresh),
+    cachedFetch(`tasks|${taskFilterStr}`, () => client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`), refresh),
+    cachedFetch('dim|paths', () => client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5`), refresh),
+    cachedFetch('dim|states', () => client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr"), refresh),
+    cachedFetch('dim|closure', () => client.requestAll<any>("DimDocumentClosureReason?$select=Id,LabelFrFr"), refresh),
+    cachedFetch('dim|elements', () => client.requestAll<any>("DimStructureElement?$select=Id,Name,StructureElementTypeKey"), refresh)
   ]);
 
   console.log(`[HIERARCHY] docs=${allDocsRaw.length}, tasks=${allTasksRaw.length}, closureReasons=${allClosureReasonsRaw.length}, elements=${allElementsRaw.length}`);

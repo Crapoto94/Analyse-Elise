@@ -19,7 +19,9 @@ export async function GET(req: Request) {
   console.log(`[API-HIERARCHY] Calling for year ${year}, month ${month}, status ${status} (Filters: ${pole}, ${dga}, ${dir})...`);
 
   try {
-    const data = await fetchDirectHierarchy(year, { pole, dga, dir, month, status, taskTypeId });
+    // ?refresh=1 force un nouveau téléchargement depuis Elise (sinon cache de 10 min)
+    const refresh = searchParams.get('refresh') === '1';
+    const data = await fetchDirectHierarchy(year, { pole, dga, dir, month, status, taskTypeId, refresh });
     await logApiRequest(`/api/hierarchy`, 'GET', 200, Date.now() - start);
     return NextResponse.json(data);
   } catch (err: any) {
