@@ -214,6 +214,32 @@ export async function searchAgents(q: string): Promise<any[]> {
 
 export type MailAttachment = { filename: string; content: string };
 
+/* Pied de page du mail (paramétrable en administration) */
+export type MailFooter = { footer1: string; footer2: string; footer3: string; footerColor: string };
+
+export const DEFAULT_FOOTER: MailFooter = {
+  footer1: 'Ville d’Ivry-sur-Seine',
+  footer2: 'Cabinet du Maire — Service courrier',
+  footer3: 'Statistiques Elise',
+  footerColor: '#0055A4',
+};
+
+const FOOTER_KEY = 'stats_mail_footer';
+
+export async function loadFooter(): Promise<MailFooter> {
+  const row = await prismaSystem.appConfig.findUnique({ where: { key: FOOTER_KEY } });
+  if (!row) return DEFAULT_FOOTER;
+  try { return { ...DEFAULT_FOOTER, ...JSON.parse(row.value) }; } catch { return DEFAULT_FOOTER; }
+}
+
+export async function saveFooter(f: MailFooter) {
+  const value = JSON.stringify(f);
+  await prismaSystem.appConfig.upsert({ where: { key: FOOTER_KEY }, update: { value }, create: { key: FOOTER_KEY, value } });
+}
+
+/** Lignes vides non envoyées : l'APM applique alors son pied de page par défaut pour ce champ. */
+const footerPayload = (f: MailFooter) => Object.fromEntries(Object.entries(f).filter(([, v]) => String(v).trim() !== ''));
+
 /**
  * POST JSON via le module https de Node (et non fetch) : le fetch patché par Next échoue
  * sur cet appel (« fetch failed ») alors que Node natif passe. Gère VILLE_CA_FILE / auto-signé.
@@ -259,10 +285,7 @@ export async function sendMailViaApm(to: string, subject: string, content: strin
     ...(cc ? { cc } : {}),
     subject,
     content,
-    footer1: 'Ville d’Ivry-sur-Seine',
-    footer2: 'Cabinet du Maire — Service courrier',
-    footer3: 'Statistiques Elise',
-    footerColor: '#0055A4',
+    ...footerPayload(await loadFooter()),
     attachments,
   });
   let json: any = {};

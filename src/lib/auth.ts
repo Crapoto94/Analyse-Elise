@@ -53,7 +53,7 @@ export async function verifyUser(email: string, passwordHash: string) {
   return null;
 }
 
-export async function createSession(user: { email: string, role: string }) {
+export async function createSession(user: { email: string, role: string, source?: 'local' | 'ad' }) {
   const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   const sessionData = JSON.stringify({ ...user, expires });
   

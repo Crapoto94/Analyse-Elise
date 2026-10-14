@@ -26,6 +26,16 @@ model ApiRequestLog {
   timestamp DateTime @default(now())
 }
 
+// Dernière connexion / activité par utilisateur (comptes locaux et AD)
+model UserActivity {
+  identifier String  @id
+  source     String
+  role       String
+  lastLogin  String?
+  lastSeen   String?
+  loginCount Int     @default(0)
+}
+
 model AppConfig {
   key   String @id
   value String

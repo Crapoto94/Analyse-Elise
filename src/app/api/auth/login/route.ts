@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { hashPassword, createSession, verifyUser } from '@/lib/auth';
 import { authenticateAd } from '@/lib/ad-auth';
+import { recordLogin } from '@/lib/activity';
 
 export async function POST(req: Request) {
   try {
@@ -16,14 +17,16 @@ export async function POST(req: Request) {
     if (user) {
       // Role casing normalization (ensure comparison works with Sidebar.tsx)
       const normalizedRole = user.role.toUpperCase();
-      await createSession({ email: user.email, role: normalizedRole });
+      await createSession({ email: user.email, role: normalizedRole, source: 'local' });
+      await recordLogin(user.email, 'local', normalizedRole);
       return NextResponse.json({ success: true, user: { email: user.email, role: normalizedRole } });
     }
 
     // 2) Active Directory de la Ville, via l'APM
     const ad = await authenticateAd(email, password);
     if (ad.ok) {
-      await createSession({ email: ad.username, role: ad.role });
+      await createSession({ email: ad.username, role: ad.role, source: 'ad' });
+      await recordLogin(ad.username, 'ad', ad.role);
       return NextResponse.json({ success: true, user: { email: ad.username, role: ad.role }, source: 'ad' });
     }
     return NextResponse.json({ error: ad.error }, { status: ad.status });

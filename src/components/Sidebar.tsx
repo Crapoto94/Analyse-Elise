@@ -29,6 +29,12 @@ export default function Sidebar() {
       .catch(() => setLastSync('Erreur'));
   }, []);
 
+  // Signale la présence de l'utilisateur toutes les 60 s (liste « utilisateurs en ligne » des Paramètres)
+  useEffect(() => {
+    const t = setInterval(() => { fetch('/api/auth/session').catch(() => {}); }, 60_000);
+    return () => clearInterval(t);
+  }, []);
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
