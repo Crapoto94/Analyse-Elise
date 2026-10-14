@@ -1,4 +1,4 @@
-import { ODataClient } from './odata';
+import { ODataClient, clearODataCache } from './odata';
 import { prismaSystem } from './prisma';
 
 function isElu(name: string): boolean {
@@ -24,6 +24,7 @@ type CacheEntry = { t: number; p: Promise<any[]> };
 const rawCache: Map<string, CacheEntry> = ((globalThis as any).__eliseRawCache ||= new Map());
 
 function cachedFetch(key: string, fn: () => Promise<any[]>, refresh = false): Promise<any[]> {
+  if (refresh) clearODataCache(); // le cache du client OData doit aussi être contourné
   const hit = rawCache.get(key);
   if (!refresh && hit && Date.now() - hit.t < RAW_TTL) return hit.p;
   const p = fn();
@@ -75,7 +76,9 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
 
   try {
     const query = `FactDocument?$filter=${encodeURIComponent(filter)}&$select=Id,DocumentIdentifier,CreatedDate,ClosedDate,MediumId,TypeId,StateId,DirectionId`;
-    let docs = await client.requestAll<any>(query);
+    // Cache 10 min des téléchargements (voir cachedFetch) ; ?refresh=1 force un nouveau téléchargement
+    const refresh = !!filters?.refresh;
+    let docs = await cachedFetch(`cab-docs|${filter}`, () => client.requestAll<any>(query), refresh);
 
     if (filters?.status && filters.status !== 'all') {
       const statusId = parseInt(filters.status);
@@ -97,10 +100,10 @@ export async function fetchCabinetEvolution(year: number, month?: string, filter
     }
 
     const [allTasks, allPathsRaw, allTypesRaw, allStatusesRaw] = await Promise.all([
-      client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`),
-      client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey`),
-      client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr"),
-      client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr")
+      cachedFetch(`tasks|${taskFilterStr}`, () => client.requestAll<any>(`FactTask?$filter=${encodeURIComponent(taskFilterStr)}&$select=DocumentId,AssignedToStructureElementId`), refresh),
+      cachedFetch('dim|paths-cab', () => client.requestAll<any>(`DimStructureElementPath?$select=Id,Level2,Level3,Level4,Level5,StructureElementTypeKey`), refresh),
+      cachedFetch('dim|types', () => client.requestAll<any>("DimDocumentType?$select=Id,LabelFrFr"), refresh),
+      cachedFetch('dim|states', () => client.requestAll<any>("DimDocumentState?$select=Id,LabelFrFr"), refresh)
     ]);
 
     const pm = new Map();

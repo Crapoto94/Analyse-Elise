@@ -16,7 +16,8 @@ export async function GET(req: Request) {
   const service = searchParams.get('service') || 'all';
 
   try {
-    const filters = { pole, dga, dir, service, status };
+    // ?refresh=1 force un nouveau téléchargement depuis Elise (sinon cache de 10 min)
+    const filters = { pole, dga, dir, service, status, refresh: searchParams.get('refresh') === '1' };
     const data = await fetchCabinetEvolution(yearVal || new Date().getFullYear(), monthVal === 'all' ? undefined : monthVal, filters);
     
     // Log interrogation

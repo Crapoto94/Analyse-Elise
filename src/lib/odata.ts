@@ -62,6 +62,16 @@ export interface ODataResponse<T> {
   value: T[];
 }
 
+// Cache mémoire partagé entre requêtes (résiste au rechargement à chaud en dev)
+const ODATA_CACHE_TTL = 10 * 60 * 1000;
+const ODATA_CACHE_MAX = 60;
+const odataCache: Map<string, { t: number; p: Promise<any[]> }> = ((globalThis as any).__odataClientCache ||= new Map());
+
+/** Vide le cache OData : le prochain appel retélécharge tout depuis Elise. */
+export function clearODataCache() {
+  odataCache.clear();
+}
+
 export class ODataClient {
   private config: ODataConfig;
 
@@ -157,7 +167,33 @@ export class ODataClient {
     }
   }
 
+  /**
+   * Lecture complète (toutes les pages) avec cache mémoire de 10 min, valable pour toutes les pages de stats.
+   * Seules les lectures (GET) sont mises en cache. Les tableaux renvoyés sont partagés : ne pas les modifier
+   * sur place. `clearODataCache()` force un nouveau téléchargement.
+   */
   public async requestAll<T>(path: string, options: RequestInit = {}): Promise<T[]> {
+    const isGet = !options.method || options.method.toUpperCase() === 'GET';
+    if (!isGet) return this.fetchAllPages<T>(path, options);
+
+    const key = `${this.config.baseUrl}|${this.config.username}|${path}`;
+    const hit = odataCache.get(key);
+    if (hit && Date.now() - hit.t < ODATA_CACHE_TTL) return hit.p as Promise<T[]>;
+
+    const p = this.fetchAllPages<T>(path, options);
+    odataCache.set(key, { t: Date.now(), p });
+    // un téléchargement en échec ne doit pas rester en cache
+    p.catch(() => { if (odataCache.get(key)?.p === p) odataCache.delete(key); });
+    // borne mémoire : on retire les plus anciennes entrées
+    while (odataCache.size > ODATA_CACHE_MAX) {
+      const oldest = odataCache.keys().next().value;
+      if (oldest === undefined) break;
+      odataCache.delete(oldest);
+    }
+    return p;
+  }
+
+  private async fetchAllPages<T>(path: string, options: RequestInit): Promise<T[]> {
     let results: T[] = [];
     let currentPath: string | null = path;
 

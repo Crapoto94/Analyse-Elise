@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ODataClient } from '../../../../lib/odata';
+import { ODataClient, clearODataCache } from '../../../../lib/odata';
 import { getODataConfig } from '../../../../lib/odata-direct';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const year = searchParams.get('year');
   const month = searchParams.get('month');
+  // ?refresh=1 force un nouveau téléchargement depuis Elise (sinon cache de 10 min)
+  if (searchParams.get('refresh') === '1') clearODataCache();
 
   if (!year || !month) {
     return NextResponse.json({ error: 'Year and month are required' }, { status: 400 });

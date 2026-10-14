@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { ODataClient } from '@/lib/odata';
+import { ODataClient, clearODataCache } from '@/lib/odata';
 import { getODataConfig } from '@/lib/odata-direct';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const year = searchParams.get('year') || '2026';
   const limit = parseInt(searchParams.get('limit') || '20');
+  // ?refresh=1 force un nouveau téléchargement depuis Elise (sinon cache de 10 min)
+  if (searchParams.get('refresh') === '1') clearODataCache();
   const search = searchParams.get('search');
 
   try {
