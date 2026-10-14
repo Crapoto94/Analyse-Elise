@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Mail, FileText, CheckCheck, Inbox, Search } from 'lucide-react';
+import { PageHeader, EmptyState } from '@/components/ui';
 
 interface CourrierStats {
   date: string;
@@ -28,6 +30,10 @@ interface CourrierStats {
   total_enregistres: number;
 }
 
+const nf = (n: number) => (n || 0).toLocaleString('fr-FR');
+/** Affiche un tiret discret pour les zéros. */
+const dash = (n: number) => (n ? nf(n) : '–');
+
 export default function StatsCourrierPage() {
   const [year, setYear] = useState<string>(new Date().getFullYear().toString());
   const [month, setMonth] = useState<string>((new Date().getMonth() + 1).toString());
@@ -52,6 +58,7 @@ export default function StatsCourrierPage() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month]);
 
   const fetchData = async () => {
@@ -99,125 +106,105 @@ export default function StatsCourrierPage() {
 
   const totals = calculateTotals();
 
-  return (
-    <div className="p-4 max-w-[100vw] mx-auto space-y-6 animate-fade-in">
-      <div className="flex justify-between items-end px-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-            Stats service courrier - Détail journalier
-            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full uppercase tracking-tighter">LIVE 📊</span>
-          </h1>
-          <p className="text-slate-500 text-sm">Répartition quotidienne des flux entrants</p>
-        </div>
-        <div className="flex gap-3">
-          <select 
-            value={year} 
-            onChange={(e) => setYear(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs"
-          >
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
+  const th = 'px-3 py-2 text-center text-[11px] font-medium';
 
-          <select 
-            value={month} 
-            onChange={(e) => setMonth(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-xs"
-          >
-            {monthNames.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
+  return (
+    <div className="page animate-fade-in">
+      <PageHeader
+        title="Stats service courrier"
+        subtitle="Détail journalier : courriels et courriers papier reçus et enregistrés."
+        actions={
+          <>
+            <select value={year} onChange={(e) => setYear(e.target.value)} className="select !w-auto" aria-label="Année">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select value={month} onChange={(e) => setMonth(e.target.value)} className="select !w-auto" aria-label="Mois">
+              {monthNames.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+          </>
+        }
+      />
+
+      {/* Synthèse du mois */}
+      {totals && !loading && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi label="Total reçus" value={totals.total_recus} icon={Inbox} />
+          <Kpi label="Courriels" value={totals.courriels.total} icon={Mail} foot={`${nf(totals.courriels.supprimes)} supprimés`} />
+          <Kpi label="Courriers papier" value={totals.papiers.total} icon={FileText} foot={`${nf(totals.papiers.non_enregistres)} non enregistrés`} />
+          <Kpi label="Enregistrés" value={totals.total_enregistres} icon={CheckCheck} />
         </div>
-      </div>
+      )}
 
       {loading ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-12 space-y-6">
-          <div className="h-64 bg-slate-50 rounded-xl animate-pulse" />
-        </div>
+        <div className="card card-pad"><div className="skeleton h-64" /></div>
       ) : data && data.length > 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-xl overflow-hidden">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-[11px] border-collapse min-w-[1200px]">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
-                <tr>
-                  <th rowSpan={2} className="p-3 border-r border-slate-700 font-black text-center uppercase tracking-widest w-24">Dates</th>
-                  <th colSpan={4} className="p-2 border-b border-r border-slate-700 font-black text-center text-sm uppercase tracking-[0.2em] bg-blue-900/40">Courriels</th>
-                  <th colSpan={4} className="p-2 border-b border-r border-slate-700 font-black text-center text-sm uppercase tracking-[0.2em] bg-orange-900/40">Courriers Papier</th>
-                  <th colSpan={2} className="p-2 border-b border-slate-700 font-black text-center text-sm uppercase tracking-[0.2em] bg-slate-800">Total</th>
+            <table className="w-full min-w-[1100px] border-collapse text-sm">
+              <thead>
+                <tr style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)' }}>
+                  <th rowSpan={2} className="w-28 px-4 py-3 text-left text-xs font-medium" style={{ color: 'var(--ink-3)' }}>Date</th>
+                  <th colSpan={4} className="border-l px-3 py-2 text-center text-xs font-semibold" style={{ color: 'var(--brand-ink)' }}>Courriels</th>
+                  <th colSpan={4} className="border-l px-3 py-2 text-center text-xs font-semibold" style={{ color: 'var(--warn)' }}>Courriers papier</th>
+                  <th colSpan={2} className="border-l px-3 py-2 text-center text-xs font-semibold" style={{ color: 'var(--ink-2)' }}>Total</th>
                 </tr>
-                <tr className="bg-slate-800 text-[10px] uppercase font-bold text-slate-300">
-                  <th className="p-2 border-r border-slate-700">Total Reçus</th>
-                  <th className="p-2 border-r border-slate-700">Supprimés</th>
-                  <th className="p-2 border-r border-slate-700 italic">Enr. Courant</th>
-                  <th className="p-2 border-r border-slate-700 italic">Enr. Muni</th>
-                  <th className="p-2 border-r border-slate-700">Total Reçus</th>
-                  <th className="p-2 border-r border-slate-700 italic">Enr. Courant</th>
-                  <th className="p-2 border-r border-slate-700 italic">Enr. Muni</th>
-                  <th className="p-2 border-r border-slate-700">Non Enr.</th>
-                  <th className="p-2 border-r border-slate-700 bg-slate-700">Recus</th>
-                  <th className="p-2 bg-slate-700">Enregistrés</th>
+                <tr style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)', color: 'var(--ink-3)' }}>
+                  <th className={`${th} border-l`}>Reçus</th>
+                  <th className={th}>Supprimés</th>
+                  <th className={th}>Enr. courant</th>
+                  <th className={th}>Enr. Muni</th>
+                  <th className={`${th} border-l`}>Reçus</th>
+                  <th className={th}>Enr. courant</th>
+                  <th className={th}>Enr. Muni</th>
+                  <th className={th}>Non enr.</th>
+                  <th className={`${th} border-l`}>Reçus</th>
+                  <th className={th}>Enregistrés</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {data.map((day) => {
                   const dayDate = new Date(day.date);
                   const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
-                  const hasData = day.total_recus > 0;
-                  
+                  const nonEnr = day.papiers.total - day.papiers.enregistres;
+                  const cell = 'px-3 py-2 text-center num';
+
                   return (
-                    <tr key={day.date} className={`${isWeekend ? 'bg-slate-50/50' : ''} ${hasData ? 'hover:bg-blue-50/30' : ''} transition-colors`}>
-                      <td className={`p-2 border-r border-slate-100 font-bold text-center ${isWeekend ? 'text-slate-400' : 'text-slate-600'}`}>
-                        {dayDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    <tr key={day.date} className="transition-colors hover:bg-[var(--surface-muted)]"
+                      style={{ borderBottom: '1px solid var(--line)', background: isWeekend ? 'var(--surface-muted)' : undefined }}>
+                      <td className="px-4 py-2 text-left text-[13px] font-medium" style={{ color: isWeekend ? 'var(--ink-3)' : 'var(--ink-2)' }}>
+                        {dayDate.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       </td>
                       {/* Courriels */}
-                      <td className="p-2 border-r border-slate-100 text-center font-bold text-slate-900 bg-blue-50/10" title={day.courriels.ids?.join('\n')}>
-                        {day.courriels.total || '-'}
-                      </td>
-                      <td className="p-2 border-r border-slate-100 text-center text-slate-400 italic">
-                        {day.courriels.supprimes || '-'}
-                      </td>
-                      <td className="p-2 border-r border-slate-100 text-center font-medium text-blue-700" title={day.courriels.courant_ids?.join('\n')}>
-                        {day.courriels.courant || '-'}
-                      </td>
-                      <td className="p-2 border-r border-slate-100 text-center font-medium text-blue-700" title={day.courriels.municipalite_ids?.join('\n')}>
-                        {day.courriels.municipalite || '-'}
-                      </td>
+                      <td className={`${cell} border-l font-medium`} title={day.courriels.ids?.join('\n')}>{dash(day.courriels.total)}</td>
+                      <td className={cell} style={{ color: 'var(--ink-3)' }}>{dash(day.courriels.supprimes)}</td>
+                      <td className={cell} style={{ color: 'var(--brand-ink)' }} title={day.courriels.courant_ids?.join('\n')}>{dash(day.courriels.courant)}</td>
+                      <td className={cell} style={{ color: 'var(--brand-ink)' }} title={day.courriels.municipalite_ids?.join('\n')}>{dash(day.courriels.municipalite)}</td>
                       {/* Papiers */}
-                      <td className="p-2 border-r border-slate-100 text-center font-bold text-slate-900 bg-orange-50/10" title={day.papiers.ids?.join('\n')}>
-                        {day.papiers.total || '-'}
-                      </td>
-                      <td className="p-2 border-r border-slate-100 text-center font-medium text-orange-700" title={day.papiers.courant_ids?.join('\n')}>
-                        {day.papiers.courant || '-'}
-                      </td>
-                      <td className="p-2 border-r border-slate-100 text-center font-medium text-orange-700" title={day.papiers.municipalite_ids?.join('\n')}>
-                        {day.papiers.municipalite || '-'}
-                      </td>
-                      <td className={`p-2 border-r border-slate-100 text-center font-bold ${day.papiers.total - day.papiers.enregistres > 0 ? 'text-red-500' : 'text-slate-300'}`}>
-                        {day.papiers.total - day.papiers.enregistres || '-'}
-                      </td>
-                      {/* Totals Daily */}
-                      <td className="p-2 border-r border-slate-100 text-center font-black text-slate-800 bg-slate-50/50">
-                        {day.total_recus || '-'}
-                      </td>
-                      <td className="p-2 text-center font-black text-blue-900 bg-blue-50/20">
-                        {day.total_enregistres || '-'}
-                      </td>
+                      <td className={`${cell} border-l font-medium`} title={day.papiers.ids?.join('\n')}>{dash(day.papiers.total)}</td>
+                      <td className={cell} style={{ color: 'var(--warn)' }} title={day.papiers.courant_ids?.join('\n')}>{dash(day.papiers.courant)}</td>
+                      <td className={cell} style={{ color: 'var(--warn)' }} title={day.papiers.municipalite_ids?.join('\n')}>{dash(day.papiers.municipalite)}</td>
+                      <td className={`${cell} font-medium`} style={{ color: nonEnr > 0 ? 'var(--danger)' : 'var(--ink-3)' }}>{dash(nonEnr)}</td>
+                      {/* Totaux du jour */}
+                      <td className={`${cell} border-l font-semibold`}>{dash(day.total_recus)}</td>
+                      <td className={`${cell} font-semibold`} style={{ color: 'var(--brand-ink)' }}>{dash(day.total_enregistres)}</td>
                     </tr>
                   );
                 })}
               </tbody>
               {totals && (
-                <tfoot className="bg-slate-900 text-white font-black text-xs">
-                  <tr>
-                    <td className="p-3 border-r border-slate-700 text-center">TOTAUX</td>
-                    <td className="p-3 border-r border-slate-700 text-center">{totals.courriels.total.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-slate-400">{totals.courriels.supprimes.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-blue-300">{totals.courriels.courant.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-blue-300">{totals.courriels.municipalite.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center">{totals.papiers.total.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-orange-300">{totals.papiers.courant.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-orange-300">{totals.papiers.municipalite.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center text-red-400">{totals.papiers.non_enregistres.toLocaleString()}</td>
-                    <td className="p-3 border-r border-slate-700 text-center bg-slate-800">{totals.total_recus.toLocaleString()}</td>
-                    <td className="p-3 text-center bg-blue-900">{totals.total_enregistres.toLocaleString()}</td>
+                <tfoot>
+                  <tr style={{ background: 'var(--brand-soft)', borderTop: '1px solid var(--brand-line)' }} className="text-[13px] font-semibold">
+                    <td className="px-4 py-3 text-left" style={{ color: 'var(--brand-ink)' }}>Totaux</td>
+                    <td className="num border-l px-3 py-3 text-center">{nf(totals.courriels.total)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--ink-3)' }}>{nf(totals.courriels.supprimes)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--brand-ink)' }}>{nf(totals.courriels.courant)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--brand-ink)' }}>{nf(totals.courriels.municipalite)}</td>
+                    <td className="num border-l px-3 py-3 text-center">{nf(totals.papiers.total)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--warn)' }}>{nf(totals.papiers.courant)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--warn)' }}>{nf(totals.papiers.municipalite)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--danger)' }}>{nf(totals.papiers.non_enregistres)}</td>
+                    <td className="num border-l px-3 py-3 text-center">{nf(totals.total_recus)}</td>
+                    <td className="num px-3 py-3 text-center" style={{ color: 'var(--brand-ink)' }}>{nf(totals.total_enregistres)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -225,12 +212,23 @@ export default function StatsCourrierPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-100 p-20 text-center transition-all shadow-sm">
-          <span className="text-5xl mb-4 block">🔍</span>
-          <p className="text-slate-500 font-bold text-lg">Aucune donnée trouvée pour cette période</p>
-          <p className="text-slate-400 text-sm">Veuillez sélectionner une autre année ou un autre mois.</p>
+        <div className="card">
+          <EmptyState icon={<Search size={20} />} title="Aucune donnée pour cette période" hint="Sélectionnez une autre année ou un autre mois." />
         </div>
       )}
+    </div>
+  );
+}
+
+function Kpi({ label, value, icon: Icon, foot }: { label: string; value: number; icon: React.ComponentType<{ size?: number }>; foot?: string }) {
+  return (
+    <div className="kpi flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="kpi-label">{label}</p>
+        <p className="kpi-value">{nf(value)}</p>
+        {foot && <p className="kpi-foot">{foot}</p>}
+      </div>
+      <span className="kpi-icon"><Icon size={18} /></span>
     </div>
   );
 }

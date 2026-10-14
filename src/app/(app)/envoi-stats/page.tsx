@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Send, Search, FileText, Check, Minus, X, AlertTriangle } from 'lucide-react';
+import { PageHeader, LoadingBlock, EmptyState, Field } from '@/components/ui';
 
 type Recipient = { key: string; name?: string; email?: string; assistantName?: string; assistantEmail?: string };
 type Svc = { name: string; countEnt: number; countSor: number };
@@ -11,6 +13,7 @@ type Result = { label: string; to?: string; status: string; detail?: string };
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const dKey = (d: string) => `D|${d}`;
 const sKey = (d: string, s: string) => `S|${d}|${s}`;
+const nf = (n: number) => (n || 0).toLocaleString('fr-FR');
 
 function previousMonth() {
   const n = new Date();
@@ -39,21 +42,25 @@ function PersonField({ name, email, placeholder, onChange }: {
   }, [q]);
 
   return (
-    <div className="relative flex flex-col gap-1 min-w-[220px]">
-      <input
-        value={q}
-        onChange={e => setQ(e.target.value)}
-        placeholder={`🔎 ${placeholder} (nom)`}
-        className="px-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-white"
-      />
+    <div className="relative min-w-[230px] space-y-1.5">
+      <div className="relative">
+        <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--ink-3)' }} />
+        <input
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          placeholder={`Chercher ${placeholder}`}
+          className="input !py-1.5 !pl-8 !text-[13px]"
+          aria-label={`Rechercher ${placeholder}`}
+        />
+      </div>
       {(hits.length > 0 || busy) && (
-        <div className="absolute top-7 left-0 z-30 w-72 bg-white border border-slate-200 rounded-lg shadow-xl max-h-56 overflow-auto">
-          {busy && <div className="p-2 text-[10px] text-slate-400">Recherche…</div>}
+        <div className="card absolute left-0 top-9 z-30 max-h-60 w-80 overflow-auto p-1 shadow-[var(--shadow-md)]">
+          {busy && <div className="p-2 text-xs" style={{ color: 'var(--ink-3)' }}>Recherche…</div>}
           {hits.map((h, i) => (
-            <button key={i} type="button" className="block w-full text-left px-2 py-1.5 hover:bg-blue-50 text-[11px]"
+            <button key={i} type="button" className="block w-full rounded-[8px] px-2.5 py-2 text-left transition-colors hover:bg-[var(--surface-sunken)]"
               onClick={() => { onChange(h.nom, h.email); setQ(''); setHits([]); }}>
-              <b>{h.nom}</b> <span className="text-slate-400">{h.email}</span>
-              <div className="text-[9px] text-slate-400 truncate">{h.fonction} — {h.direction}</div>
+              <div className="text-[13px] font-medium">{h.nom} <span className="font-normal" style={{ color: 'var(--ink-3)' }}>{h.email}</span></div>
+              <div className="truncate text-xs" style={{ color: 'var(--ink-3)' }}>{h.fonction} · {h.direction}</div>
             </button>
           ))}
         </div>
@@ -61,10 +68,11 @@ function PersonField({ name, email, placeholder, onChange }: {
       <input
         value={email || ''}
         onChange={e => onChange(name || '', e.target.value)}
-        placeholder="e-mail"
-        className="px-2 py-1 text-[11px] border border-slate-200 rounded-lg bg-slate-50"
+        placeholder="adresse e-mail"
+        className="input !py-1.5 !text-[13px]"
+        aria-label={`E-mail ${placeholder}`}
       />
-      {name && <span className="text-[10px] text-slate-500 truncate">{name}</span>}
+      {name && <p className="truncate text-xs" style={{ color: 'var(--ink-3)' }}>{name}</p>}
     </div>
   );
 }
@@ -169,12 +177,13 @@ export default function EnvoiStatsPage() {
     const payload = Array.from(dirty).map(k => recipients[k]).filter(Boolean);
     const res = await fetch('/api/envoi-stats/recipients', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipients: payload }) });
     const j = await res.json();
-    if (!res.ok) { alert(j.error || 'Erreur'); return; }
+    if (!res.ok) { setError(j.error || 'Erreur'); return false; }
     setDirty(new Set());
+    return true;
   };
 
   const send = async () => {
-    if (dirty.size > 0) await save();
+    if (dirty.size > 0 && !(await save())) return;
     const items: any[] = [];
     selDirs.forEach(d => items.push({ kind: 'direction', dir: d, includeAssistant: withAssistant.has(d) }));
     if (mode === 'service') {
@@ -182,7 +191,7 @@ export default function EnvoiStatsPage() {
     }
     const target = testTo.trim() ? `l'adresse de TEST ${testTo.trim()}` : `${items.length} destinataire(s) réel(s)`;
     if (!confirm(`Envoyer ${items.length} PDF (${MONTHS[month - 1]} ${year}) vers ${target} ?`)) return;
-    setSending(true); setResults(null);
+    setSending(true); setResults(null); setError('');
     try {
       const res = await fetch('/api/envoi-stats/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year, month, items, testTo: testTo.trim() || undefined, cc: ccAll.trim() || undefined }) });
       const j = await res.json();
@@ -196,149 +205,167 @@ export default function EnvoiStatsPage() {
   const pdfUrl = (dir: string, svc?: string) =>
     `/api/envoi-stats/pdf?year=${year}&month=${month}&dir=${encodeURIComponent(dir)}${svc ? `&service=${encodeURIComponent(svc)}` : ''}`;
 
+  const resultIcon = (s: string) => s === 'envoyé' ? <Check size={14} /> : s === 'ignoré' ? <Minus size={14} /> : <X size={14} />;
+  const resultColor = (s: string) => s === 'envoyé' ? 'var(--ok)' : s === 'ignoré' ? 'var(--warn)' : 'var(--danger)';
+
   return (
-    <div className="p-8 space-y-6 max-w-[1500px] mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-          Envoi des statistiques
-          <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full uppercase tracking-tighter">PDF par e-mail</span>
-        </h1>
-        <p className="text-slate-500">Envoi à la demande du tableau Entrants/Sortants aux directeurs, responsables de service et assistants de direction.</p>
-        {hubError && (
-          <p className="text-[11px] text-amber-600 mt-1">⚠ Hub DSI injoignable ({hubError}) : seuls les e-mails saisis ici sont utilisés.</p>
-        )}
-      </div>
+    <div className="page animate-fade-in pb-28">
+      <PageHeader
+        title="Envoi des statistiques"
+        subtitle="Envoi à la demande du tableau Entrants / Sortants, en PDF, aux directeurs, responsables de service et assistantes de direction."
+      />
 
-      <div className="flex flex-wrap items-end gap-4 bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Envoyer aux</label>
-          <div className="flex rounded-xl overflow-hidden border border-slate-200">
-            {(['direction', 'service'] as const).map(m => (
-              <button key={m} onClick={() => setMode(m)}
-                className={`px-4 py-2 text-sm font-bold ${mode === m ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}>
-                {m === 'direction' ? 'Directions' : 'Directions + services'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mois (1er → dernier jour)</label>
-          <div className="flex gap-2">
-            <select value={month} onChange={e => setMonth(Number(e.target.value))} className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm font-bold text-blue-900">
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-            <select value={year} onChange={e => setYear(Number(e.target.value))} className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm font-bold text-blue-900">
-              {years.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrer</label>
-          <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="direction ou service…" className="px-3 py-2 border border-slate-200 rounded-xl text-sm" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Copie (Cc) de chaque mail</label>
-          <input value={ccAll} onChange={e => setCcAll(e.target.value)} placeholder="adresse(s), séparées par une virgule" className="px-3 py-2 border border-slate-200 rounded-xl text-sm w-64" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mode test (adresse unique)</label>
-          <input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="votre@mail — rien ne part aux destinataires" className="px-3 py-2 border border-amber-200 bg-amber-50 rounded-xl text-sm w-72" />
-        </div>
-        <div className="flex gap-2 ml-auto">
-          <button onClick={() => selectAll(true)} className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl">Tout cocher</button>
-          <button onClick={() => selectAll(false)} className="px-3 py-2 text-xs font-bold border border-slate-200 rounded-xl">Tout décocher</button>
-          <button onClick={toggleAllAssistants} disabled={withAssistantAvail.length === 0}
-            className="px-3 py-2 text-xs font-bold border border-indigo-200 text-indigo-700 rounded-xl disabled:opacity-40">
-            {allAssistChecked ? 'Décocher' : 'Cocher'} toutes les assistantes ({withAssistantAvail.length})
-          </button>
-          {dirty.size > 0 && isAdmin && <button onClick={save} className="px-3 py-2 text-xs font-bold bg-emerald-600 text-white rounded-xl">Enregistrer les e-mails ({dirty.size})</button>}
-          <button disabled={!isAdmin || count === 0 || sending} onClick={send}
-            className="px-5 py-2 text-sm font-black bg-blue-600 text-white rounded-xl disabled:opacity-40">
-            {sending ? 'Envoi…' : `Envoyer (${count})`}
-          </button>
-        </div>
-      </div>
-
-      {!isAdmin && <p className="text-xs text-slate-500">L'enregistrement des e-mails et l'envoi sont réservés aux administrateurs.</p>}
-      {error && <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">{error}</div>}
-
-      {results && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-1">
-          <h3 className="font-black text-sm text-slate-700">Résultat de l'envoi</h3>
-          {results.map((r, i) => (
-            <div key={i} className={`text-xs ${r.status === 'envoyé' ? 'text-emerald-700' : r.status === 'ignoré' ? 'text-amber-600' : 'text-red-600'}`}>
-              {r.status === 'envoyé' ? '✓' : r.status === 'ignoré' ? '–' : '✗'} <b>{r.label}</b> {r.to && `→ ${r.to}`} {r.detail && `(${r.detail})`}
-            </div>
-          ))}
+      {hubError && (
+        <div className="alert alert-warn flex items-start gap-2.5">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>Hub DSI injoignable ({hubError}) : seuls les e-mails saisis ici sont utilisés.</span>
         </div>
       )}
 
-      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[1000px]">
-          <thead>
-            <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              <th className="px-4 py-3 w-10"></th>
-              <th className="px-2 py-3">Direction{mode === 'service' ? ' / Services' : ''}</th>
-              <th className="px-2 py-3 text-center">ENT</th>
-              <th className="px-2 py-3 text-center">SOR</th>
-              <th className="px-2 py-3">Directeur / Responsable</th>
-              <th className="px-2 py-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={allAssistChecked} onChange={toggleAllAssistants} disabled={withAssistantAvail.length === 0} />
-                  Assistant(e) de direction <span className="normal-case font-medium">(option, tout cocher)</span>
-                </label>
-              </th>
-              <th className="px-2 py-3">PDF</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && <tr><td colSpan={7} className="p-8 text-center text-slate-400 text-sm">Chargement des statistiques…</td></tr>}
-            {!loading && visibleTree.map(d => {
-              const r = { key: dKey(d.name), ...eff(dKey(d.name)) };
-              return (
-                <DirectionRows key={d.name}>
-                  <tr className="border-t border-slate-100 bg-blue-50/40 align-top">
-                    <td className="px-4 py-2"><input type="checkbox" checked={selDirs.has(d.name)} onChange={() => toggleDir(d)} /></td>
-                    <td className="px-2 py-2">
-                      <div className="text-sm font-black text-slate-800">{d.name}</div>
-                      {d.dga && <div className="text-[10px] text-slate-400 italic">{d.dga}</div>}
-                      {r.hubLabel && <div className="text-[9px] text-emerald-600">Hub : {r.hubLabel}</div>}
-                    </td>
-                    <td className="px-2 py-2 text-center font-bold text-blue-700">{d.countEnt}</td>
-                    <td className="px-2 py-2 text-center font-bold text-amber-700">{d.countSor}</td>
-                    <td className="px-2 py-2">
-                      <PersonField name={r.name} email={r.email} placeholder="directeur" onChange={(name, email) => patch(r.key, { name, email, assistantName: r.assistantName, assistantEmail: r.assistantEmail })} />
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex gap-2 items-start">
-                        <input type="checkbox" title="Inclure l'assistant(e) en copie" checked={withAssistant.has(d.name)} onChange={() => toggle(withAssistant, setWithAssistant, d.name)} className="mt-2" />
-                        <PersonField name={r.assistantName} email={r.assistantEmail} placeholder="assistant(e)" onChange={(assistantName, assistantEmail) => patch(r.key, { name: r.name, email: r.email, assistantName, assistantEmail })} />
-                      </div>
-                    </td>
-                    <td className="px-2 py-2"><a href={pdfUrl(d.name)} target="_blank" className="text-[11px] font-bold text-blue-600 hover:underline">Aperçu</a></td>
-                  </tr>
-                  {mode === 'service' && d.services.map(s => {
-                    const sk = sKey(d.name, s.name);
-                    const sr = { key: sk, ...eff(sk) };
-                    return (
-                      <tr key={sk} className="border-t border-slate-50 align-top">
-                        <td className="px-4 py-2 text-right"><input type="checkbox" checked={selSvcs.has(sk)} onChange={() => toggle(selSvcs, setSelSvcs, sk)} /></td>
-                        <td className="px-2 py-2 pl-8 text-[12px] font-semibold text-slate-600">{s.name}{sr.hubLabel && <div className="text-[9px] font-normal text-emerald-600">Hub : {sr.hubLabel}</div>}</td>
-                        <td className="px-2 py-2 text-center text-blue-600/80">{s.countEnt}</td>
-                        <td className="px-2 py-2 text-center text-amber-600/80">{s.countSor}</td>
-                        <td className="px-2 py-2">
-                          <PersonField name={sr.name} email={sr.email} placeholder="responsable" onChange={(name, email) => patch(sk, { name, email })} />
-                        </td>
-                        <td></td>
-                        <td className="px-2 py-2"><a href={pdfUrl(d.name, s.name)} target="_blank" className="text-[11px] font-bold text-blue-600 hover:underline">Aperçu</a></td>
-                      </tr>
-                    );
-                  })}
-                </DirectionRows>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* Paramètres de l'envoi */}
+      <div className="card card-pad grid items-end gap-5 md:grid-cols-2 xl:grid-cols-[auto_auto_1fr_1fr_1fr]">
+        <Field label="Envoyer aux">
+          <div className="seg">
+            <button className="seg-item" data-active={mode === 'direction'} onClick={() => setMode('direction')}>Directions</button>
+            <button className="seg-item" data-active={mode === 'service'} onClick={() => setMode('service')}>Directions + services</button>
+          </div>
+        </Field>
+        <Field label="Période (du 1er au dernier jour du mois)">
+          <div className="flex gap-2">
+            <select value={month} onChange={e => setMonth(Number(e.target.value))} className="select" aria-label="Mois">
+              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+            <select value={year} onChange={e => setYear(Number(e.target.value))} className="select !w-auto" aria-label="Année">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </Field>
+        <Field label="Filtrer la liste">
+          <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Direction ou service…" className="input" />
+        </Field>
+        <Field label="Copie (Cc) de chaque mail" hint="Plusieurs adresses possibles, séparées par une virgule.">
+          <input value={ccAll} onChange={e => setCcAll(e.target.value)} placeholder="adresse@ivry94.fr" className="input" />
+        </Field>
+        <Field label="Mode test" hint="Tous les PDF partent vers cette seule adresse.">
+          <input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="votre@adresse.fr"
+            className="input" style={testTo ? { background: 'var(--warn-soft)', borderColor: '#f3dfb9' } : undefined} />
+        </Field>
+      </div>
+
+      {!isAdmin && <p className="text-sm" style={{ color: 'var(--ink-3)' }}>L&apos;enregistrement des e-mails et l&apos;envoi sont réservés aux administrateurs.</p>}
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
+
+      {results && (
+        <section className="card card-pad">
+          <h2 className="mb-3 text-base font-semibold">Résultat de l&apos;envoi</h2>
+          <ul className="space-y-1.5">
+            {results.map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <span className="mt-0.5" style={{ color: resultColor(r.status) }}>{resultIcon(r.status)}</span>
+                <span><span className="font-medium">{r.label}</span>{r.to && <span style={{ color: 'var(--ink-3)' }}> → {r.to}</span>}{r.detail && <span style={{ color: resultColor(r.status) }}> ({r.detail})</span>}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Liste */}
+      <section className="card overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 px-5 py-3" style={{ borderBottom: '1px solid var(--line)', background: 'var(--surface-muted)' }}>
+          <button onClick={() => selectAll(true)} className="btn btn-secondary btn-sm">Tout cocher</button>
+          <button onClick={() => selectAll(false)} className="btn btn-secondary btn-sm">Tout décocher</button>
+          <button onClick={toggleAllAssistants} disabled={withAssistantAvail.length === 0} className="btn btn-secondary btn-sm">
+            {allAssistChecked ? 'Décocher' : 'Cocher'} les assistantes ({withAssistantAvail.length})
+          </button>
+          <span className="ml-auto text-sm" style={{ color: 'var(--ink-3)' }}>{visibleTree.length} directions</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="tbl min-w-[1000px]">
+            <thead>
+              <tr>
+                <th className="w-10"></th>
+                <th>Direction{mode === 'service' ? ' et services' : ''}</th>
+                <th className="text-center">Entrants</th>
+                <th className="text-center">Sortants</th>
+                <th>Directeur / responsable</th>
+                <th>Assistante de direction <span className="font-normal">(en copie, option)</span></th>
+                <th>PDF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && <tr><td colSpan={7}><LoadingBlock label="Chargement des statistiques…" /></td></tr>}
+              {!loading && visibleTree.length === 0 && (
+                <tr><td colSpan={7}><EmptyState title="Aucune direction" hint="Aucune donnée pour cette période ou ce filtre." /></td></tr>
+              )}
+              {!loading && visibleTree.map(d => {
+                const r = { key: dKey(d.name), ...eff(dKey(d.name)) };
+                return (
+                  <DirectionRows key={d.name}>
+                    <tr className="align-top" style={{ background: selDirs.has(d.name) ? 'var(--brand-soft)' : undefined }}>
+                      <td><input type="checkbox" checked={selDirs.has(d.name)} onChange={() => toggleDir(d)} aria-label={`Sélectionner ${d.name}`} /></td>
+                      <td>
+                        <div className="text-sm font-semibold">{d.name}</div>
+                        {d.dga && <div className="text-xs" style={{ color: 'var(--ink-3)' }}>{d.dga}</div>}
+                        {r.hubLabel && <span className="badge badge-ok mt-1 !text-[10px]">Hub : {r.hubLabel}</span>}
+                      </td>
+                      <td className="num text-center font-semibold" style={{ color: 'var(--brand-ink)' }}>{nf(d.countEnt)}</td>
+                      <td className="num text-center font-semibold" style={{ color: 'var(--warn)' }}>{nf(d.countSor)}</td>
+                      <td>
+                        <PersonField name={r.name} email={r.email} placeholder="le directeur" onChange={(name, email) => patch(r.key, { name, email, assistantName: r.assistantName, assistantEmail: r.assistantEmail })} />
+                      </td>
+                      <td>
+                        <div className="flex items-start gap-2.5">
+                          <input type="checkbox" title="Mettre l'assistante en copie" aria-label="Mettre l'assistante en copie" checked={withAssistant.has(d.name)} onChange={() => toggle(withAssistant, setWithAssistant, d.name)} className="mt-2.5" />
+                          <PersonField name={r.assistantName} email={r.assistantEmail} placeholder="l'assistante" onChange={(assistantName, assistantEmail) => patch(r.key, { name: r.name, email: r.email, assistantName, assistantEmail })} />
+                        </div>
+                      </td>
+                      <td>
+                        <a href={pdfUrl(d.name)} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm"><FileText size={14} /> Aperçu</a>
+                      </td>
+                    </tr>
+                    {mode === 'service' && d.services.map(s => {
+                      const sk = sKey(d.name, s.name);
+                      const sr = { key: sk, ...eff(sk) };
+                      return (
+                        <tr key={sk} className="align-top" style={{ background: selSvcs.has(sk) ? 'var(--brand-soft)' : 'var(--surface-muted)' }}>
+                          <td className="text-right"><input type="checkbox" checked={selSvcs.has(sk)} onChange={() => toggle(selSvcs, setSelSvcs, sk)} aria-label={`Sélectionner ${s.name}`} /></td>
+                          <td className="!pl-8">
+                            <div className="text-[13px] font-medium" style={{ color: 'var(--ink-2)' }}>{s.name}</div>
+                            {sr.hubLabel && <span className="badge badge-ok mt-1 !text-[10px]">Hub : {sr.hubLabel}</span>}
+                          </td>
+                          <td className="num text-center" style={{ color: 'var(--brand-ink)' }}>{nf(s.countEnt)}</td>
+                          <td className="num text-center" style={{ color: 'var(--warn)' }}>{nf(s.countSor)}</td>
+                          <td><PersonField name={sr.name} email={sr.email} placeholder="le responsable" onChange={(name, email) => patch(sk, { name, email })} /></td>
+                          <td></td>
+                          <td><a href={pdfUrl(d.name, s.name)} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm"><FileText size={14} /> Aperçu</a></td>
+                        </tr>
+                      );
+                    })}
+                  </DirectionRows>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Barre d'action */}
+      <div
+        className="fixed bottom-0 right-0 z-30 flex items-center justify-between gap-4 px-8 py-3 backdrop-blur"
+        style={{ left: 'var(--sidebar-w)', background: 'rgba(255,255,255,0.92)', borderTop: '1px solid var(--line)' }}
+      >
+        <p className="text-sm" style={{ color: 'var(--ink-2)' }}>
+          <span className="num font-semibold">{count}</span> sélectionné{count > 1 ? 's' : ''}
+          {testTo.trim() && <span className="badge badge-warn ml-2">Mode test : {testTo.trim()}</span>}
+          {dirty.size > 0 && <span className="ml-3" style={{ color: 'var(--ink-3)' }}>{dirty.size} e-mail{dirty.size > 1 ? 's' : ''} modifié{dirty.size > 1 ? 's' : ''}</span>}
+        </p>
+        <div className="flex items-center gap-2">
+          {dirty.size > 0 && isAdmin && <button onClick={save} className="btn btn-secondary">Enregistrer les e-mails</button>}
+          <button disabled={!isAdmin || count === 0 || sending} onClick={send} className="btn btn-primary">
+            <Send size={15} /> {sending ? 'Envoi en cours…' : `Envoyer (${count})`}
+          </button>
+        </div>
       </div>
     </div>
   );

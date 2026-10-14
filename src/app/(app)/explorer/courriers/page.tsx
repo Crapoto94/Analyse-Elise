@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Search, ChevronDown, FolderOpen } from 'lucide-react';
+import { PageHeader, EmptyState, LoadingBlock } from '@/components/ui';
 
 interface Task {
   id: number;
@@ -19,6 +21,12 @@ interface Courrier {
   direction: string;
   tasks: Task[];
 }
+
+const stateBadge = (state: string) =>
+  state === 'Terminée' ? 'badge-ok'
+  : state === 'Refusée' ? 'badge-danger'
+  : state === 'Démarrée' || state === 'Demandée' ? 'badge-brand'
+  : '';
 
 export default function CourriersExplorer() {
   const [courriers, setCourriers] = useState<Courrier[]>([]);
@@ -65,151 +73,103 @@ export default function CourriersExplorer() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-gray-950 p-4 md:p-8">
-      <div className="max-w-5xl mx-auto">
-        {/* Header & Filters */}
-        <header className="sticky top-0 z-30 bg-slate-50/80 dark:bg-gray-950/80 backdrop-blur-md pb-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-3">
-                <span className="p-2 bg-blue-600 text-white rounded-lg text-sm">📨</span>
-                Explorateur <span className="text-blue-600">Courriers</span>
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 bg-white dark:bg-gray-900 p-1.5 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-               {[2026, 2025, 2024].map((y) => (
-                 <button
-                   key={y}
-                   onClick={() => setYear(y.toString())}
-                   className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                     year === y.toString()
-                       ? 'bg-blue-600 text-white'
-                       : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
-                   }`}
-                 >
-                   {y}
-                 </button>
-               ))}
-            </div>
+    <div className="page animate-fade-in" style={{ maxWidth: 1100 }}>
+      <PageHeader
+        title="Explorateur courrier"
+        subtitle="Recherche d'un courrier par numéro de chrono et suivi de ses tâches."
+        actions={
+          <div className="seg" role="group" aria-label="Année">
+            {[2026, 2025, 2024].map((y) => (
+              <button key={y} className="seg-item" data-active={year === y.toString()} onClick={() => setYear(y.toString())}>{y}</button>
+            ))}
           </div>
+        }
+      />
 
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Rechercher par N° Chrono (ex: ENT-2026...)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-5 py-3.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl shadow-xl shadow-blue-500/5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm font-medium"
-            />
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-              {loading && <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>}
-              <span className="text-gray-300">🔍</span>
-            </div>
-          </div>
-        </header>
-
-        {/* Results List - Concentrated View */}
-        {loading && courriers.length === 0 ? (
-          <div className="py-20 text-center">
-            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Chargement...</p>
-          </div>
-        ) : courriers.length === 0 ? (
-          <div className="bg-white dark:bg-gray-900 rounded-3xl p-16 text-center border border-gray-100 dark:border-gray-800 shadow-sm">
-            <span className="text-4xl mb-4 block">📂</span>
-            <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Aucun résultat trouvé</p>
-          </div>
-        ) : (
-          <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-xl shadow-gray-200/20 dark:shadow-none overflow-hidden">
-             <div className="grid grid-cols-12 px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-800 text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                <div className="col-span-4 md:col-span-3">Identifiant</div>
-                <div className="hidden md:block col-span-2">Type</div>
-                <div className="col-span-4 md:col-span-3">Date Création</div>
-                <div className="col-span-2 text-center">Tâches</div>
-                <div className="col-span-2 md:col-span-2 text-right">Action</div>
-             </div>
-
-             <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
-               {courriers.map((doc) => (
-                 <React.Fragment key={doc.id}>
-                    <div 
-                      onClick={() => toggleDoc(doc.id)}
-                      className={`grid grid-cols-12 px-6 py-4 items-center cursor-pointer transition-colors hover:bg-blue-50/30 dark:hover:bg-blue-900/10 ${expandedDoc === doc.id ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''}`}
-                    >
-                      <div className="col-span-4 md:col-span-3">
-                      <div className="font-black text-gray-900 dark:text-gray-100 text-sm tracking-tight">{doc.identifier}</div>
-                      <div className="text-[10px] font-bold text-blue-600 truncate max-w-[150px]">{doc.direction}</div>
-                    </div>
-                      <div className="hidden md:block col-span-2">
-                         <span className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-[9px] font-black text-gray-500 uppercase tracking-tighter">
-                           {doc.type}
-                         </span>
-                      </div>
-                      <div className="col-span-4 md:col-span-3 text-xs font-bold text-gray-400">
-                        {formatDate(doc.createdDate, true)}
-                      </div>
-                      <div className="col-span-2 text-center">
-                         <span className={`inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-lg text-xs font-black ${doc.tasks.length > 0 ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'bg-gray-100 text-gray-300 dark:bg-gray-800'}`}>
-                           {doc.tasks.length}
-                         </span>
-                      </div>
-                      <div className="col-span-2 md:col-span-2 text-right">
-                         <div className={`inline-block transition-transform duration-300 ${expandedDoc === doc.id ? 'rotate-180 text-blue-600' : 'text-gray-300'}`}>
-                           ▼
-                         </div>
-                      </div>
-                    </div>
-
-                    {expandedDoc === doc.id && (
-                      <div className="col-span-12 bg-gray-50/30 dark:bg-gray-900/40 border-y border-blue-100/30 dark:border-blue-900/20 px-12 py-6 animate-in fade-in slide-in-from-top-1 duration-300">
-                         {doc.tasks.length === 0 ? (
-                           <p className="text-[11px] font-bold text-gray-400 italic">Aucune tâche associée.</p>
-                         ) : (
-                           <div className="space-y-3 relative before:absolute before:left-[-1.5rem] before:top-2 before:bottom-2 before:w-0.5 before:bg-blue-200 dark:before:bg-blue-900/40">
-                             {doc.tasks.map((task, tidx) => (
-                               <div key={task.id} className="relative">
-                                  <div className="absolute -left-[1.85rem] top-2 w-2 h-2 rounded-full bg-blue-500 ring-4 ring-white dark:ring-gray-950"></div>
-                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 p-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                                     <div className="flex items-center gap-3">
-                                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap">
-                                          #{tidx + 1}
-                                          <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                          {task.type}
-                                        </span>
-                                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter ${
-                                          task.state === 'Terminée' ? 'bg-green-100 text-green-700' :
-                                          task.state === 'Refusée' ? 'bg-red-100 text-red-700' :
-                                          task.state === 'Démarrée' || task.state === 'Demandée' ? 'bg-blue-100 text-blue-700' :
-                                          'bg-gray-100 text-gray-500'
-                                        }`}>
-                                          {task.state}
-                                        </span>
-                                        <p className="text-xs font-black text-gray-700 dark:text-gray-300 truncate">
-                                          {task.assignedTo}
-                                        </p>
-                                     </div>
-                                     <div className="text-[9px] font-bold text-gray-400 italic shrink-0">
-                                        Assignée le {formatDate(task.date)}
-                                     </div>
-                                  </div>
-                               </div>
-                             ))}
-                           </div>
-                         )}
-                      </div>
-                    )}
-                 </React.Fragment>
-               ))}
-             </div>
-          </div>
-        )}
-
-        <footer className="mt-10 pb-10 text-center">
-           <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">
-             Affichage des 30 derniers résultats
-           </p>
-        </footer>
+      {/* Recherche */}
+      <div className="relative">
+        <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--ink-3)' }} />
+        <input
+          type="text"
+          placeholder="Rechercher par numéro de chrono (ex. ENT-2026…)"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input !py-3 !pl-10 !pr-10"
+          aria-label="Rechercher un courrier"
+        />
+        {loading && <span className="spinner absolute right-3.5 top-1/2 -translate-y-1/2 !h-4 !w-4" />}
       </div>
+
+      {loading && courriers.length === 0 ? (
+        <LoadingBlock />
+      ) : courriers.length === 0 ? (
+        <div className="card"><EmptyState icon={<FolderOpen size={20} />} title="Aucun résultat" hint="Modifiez votre recherche ou l'année." /></div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="grid grid-cols-12 px-5 py-3 text-xs font-medium" style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)', color: 'var(--ink-3)' }}>
+            <div className="col-span-5 md:col-span-3">Identifiant</div>
+            <div className="hidden md:block md:col-span-3">Type</div>
+            <div className="col-span-4 md:col-span-3">Création</div>
+            <div className="col-span-2 text-center">Tâches</div>
+            <div className="col-span-1" />
+          </div>
+
+          <div>
+            {courriers.map((doc) => {
+              const open = expandedDoc === doc.id;
+              return (
+                <React.Fragment key={doc.id}>
+                  <button
+                    onClick={() => toggleDoc(doc.id)}
+                    aria-expanded={open}
+                    className="grid w-full grid-cols-12 items-center px-5 py-3.5 text-left transition-colors hover:bg-[var(--surface-muted)]"
+                    style={{ borderBottom: '1px solid var(--line)', background: open ? 'var(--brand-soft)' : undefined }}
+                  >
+                    <div className="col-span-5 min-w-0 md:col-span-3">
+                      <div className="text-sm font-semibold">{doc.identifier}</div>
+                      <div className="truncate text-xs" style={{ color: 'var(--ink-3)' }} title={doc.direction}>{doc.direction}</div>
+                    </div>
+                    <div className="hidden md:col-span-3 md:block"><span className="badge">{doc.type}</span></div>
+                    <div className="num col-span-4 text-sm md:col-span-3" style={{ color: 'var(--ink-2)' }}>{formatDate(doc.createdDate, true)}</div>
+                    <div className="col-span-2 text-center">
+                      <span className={`badge num ${doc.tasks.length > 0 ? 'badge-brand' : ''}`}>{doc.tasks.length}</span>
+                    </div>
+                    <div className="col-span-1 flex justify-end" style={{ color: open ? 'var(--brand)' : 'var(--ink-3)' }}>
+                      <ChevronDown size={16} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </div>
+                  </button>
+
+                  {open && (
+                    <div className="px-5 py-5" style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)' }}>
+                      {doc.tasks.length === 0 ? (
+                        <p className="text-sm" style={{ color: 'var(--ink-3)' }}>Aucune tâche associée.</p>
+                      ) : (
+                        <ol className="relative ml-2 space-y-3 pl-6" style={{ borderLeft: '2px solid var(--brand-line)' }}>
+                          {doc.tasks.map((task, tidx) => (
+                            <li key={task.id} className="relative">
+                              <span className="absolute -left-[31px] top-4 h-2.5 w-2.5 rounded-full" style={{ background: 'var(--brand)', boxShadow: '0 0 0 4px var(--surface-muted)' }} />
+                              <div className="flex flex-col justify-between gap-2 rounded-[10px] p-3 md:flex-row md:items-center" style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}>
+                                <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                                  <span className="text-xs font-semibold" style={{ color: 'var(--brand-ink)' }}>#{tidx + 1} · {task.type}</span>
+                                  <span className={`badge ${stateBadge(task.state)}`}>{task.state}</span>
+                                  <span className="truncate text-sm font-medium">{task.assignedTo}</span>
+                                </div>
+                                <span className="shrink-0 text-xs" style={{ color: 'var(--ink-3)' }}>Assignée le {formatDate(task.date)}</span>
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <p className="pb-6 text-center text-xs" style={{ color: 'var(--ink-3)' }}>Affichage des 30 derniers résultats.</p>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Download, RefreshCw, ArrowLeftRight } from 'lucide-react';
+import { PageHeader, EmptyState } from '@/components/ui';
+
+const nf = (n: number) => (n || 0).toLocaleString('fr-FR');
 
 export default function EntrantsSortantsPage() {
   const currentYear = new Date().getFullYear();
@@ -12,20 +16,22 @@ export default function EntrantsSortantsPage() {
   const [directions, setDirections] = useState<any[]>([]);
   const [selectedDir, setSelectedDir] = useState('all');
   const [services, setServices] = useState<any[]>([]);
-  
+
   const [itemsWithCounts, setItemsWithCounts] = useState<any[]>([]);
   const [currentTotalData, setCurrentTotalData] = useState<any>({ countEnt: 0, countSor: 0, count: 0 });
   const [loading, setLoading] = useState(true);
   const [showPeople, setShowPeople] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0); // > 0 : nouveau téléchargement depuis Elise
 
   const years = Array.from({ length: currentYear - 2023 + 1 }, (_, i) => 2023 + i);
+  const refreshParam = refreshTick > 0 ? '&refresh=1' : '';
 
   // Initial load: Fetch pôle and direction names
   useEffect(() => {
     const fetchBaseHierarchy = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/hierarchy?year=${year}&taskTypeId=114`);
+        const res = await fetch(`/api/hierarchy?year=${year}&taskTypeId=114${refreshParam}`);
         const json = await res.json();
         setPoles(json.poles || []);
         setDgas(json.dgas || []);
@@ -37,7 +43,8 @@ export default function EntrantsSortantsPage() {
       }
     };
     fetchBaseHierarchy();
-  }, [year]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, refreshTick]);
 
   // Fetch data based on selection
   useEffect(() => {
@@ -48,10 +55,10 @@ export default function EntrantsSortantsPage() {
         if (selectedPole !== 'all') params.set('pole', selectedPole);
         if (selectedDga !== 'all') params.set('dga', selectedDga);
         if (selectedDir !== 'all') params.set('dir', selectedDir);
-        
+
         const res = await fetch(`/api/hierarchy?${params}`);
         const json = await res.json();
-        
+
         if (selectedPole === 'all') {
            setItemsWithCounts(json.poles || []);
            const total = calculateTotal(json.poles || []);
@@ -130,7 +137,7 @@ export default function EntrantsSortantsPage() {
     };
 
     fetchData();
-  }, [selectedPole, selectedDga, selectedDir, year]);
+  }, [selectedPole, selectedDga, selectedDir, year, refreshTick]);
 
   const downloadExcel = (name: string, type: string, ids: string[]) => {
     if (!ids || ids.length === 0) return;
@@ -148,287 +155,187 @@ export default function EntrantsSortantsPage() {
     document.body.removeChild(link);
   };
 
-  const renderCell = (item: any, count: number, ids: string[], type: string, bgColor: string, textColor: string, isBold: boolean = false) => {
-    const displayIds = ids?.slice(0, 30) || [];
-    const hasMore = ids?.length > 30;
-    
-    let tooltipText = displayIds.join(', ') + (hasMore ? `... (+${ids.length - 30})` : '');
-    
-    const reasonsList = type === 'Entrants' && item.closureReasons ? Object.entries(item.closureReasons)
-      .filter(([, data]: [string, any]) => data.count > 0)
-      .sort((a: any, b: any) => b[1].count - a[1].count)
+  const tooltipFor = (ids: string[]) => {
+    const shown = ids?.slice(0, 30) || [];
+    return shown.join(', ') + ((ids?.length || 0) > 30 ? `… (+${ids.length - 30})` : '');
+  };
+
+  const reasonsOf = (closureReasons?: any) =>
+    closureReasons
+      ? Object.entries(closureReasons).filter(([, d]: [string, any]) => d.count > 0).sort((a: any, b: any) => b[1].count - a[1].count)
       : [];
 
+  /** Cellule chiffrée : valeur, motifs de clôture (colonne « Total ent. »), export CSV au survol. */
+  const Cell = ({ name, count, ids, type, strong = false, tone = 'ink', reasons = [] as [string, any][], head = false }: {
+    name: string; count: number; ids: string[]; type: string; strong?: boolean;
+    tone?: 'ink' | 'brand' | 'warn'; reasons?: [string, any][]; head?: boolean;
+  }) => {
+    const color = count ? (tone === 'brand' ? 'var(--brand-ink)' : tone === 'warn' ? 'var(--warn)' : 'var(--ink)') : 'var(--ink-3)';
     return (
-      <td className={`px-2 py-0.5 text-center border-l border-slate-100/50 ${bgColor} group/cell relative ${type === 'Entrants' ? 'w-[100px]' : ''}`}>
-        <div className="flex flex-col items-center justify-center gap-0.5">
-          <span 
-            className={`${isBold ? 'font-black' : 'font-bold'} ${textColor} cursor-help transition-transform hover:scale-110 whitespace-pre-line text-sm`}
-            title={tooltipText}
+      <td className="group/cell relative px-3 py-2.5 text-center align-middle" style={head ? { background: 'var(--brand-soft)' } : undefined}>
+        <span
+          className={`num cursor-help ${strong || head ? 'text-[15px] font-semibold' : 'text-sm'}`}
+          style={{ color }} title={tooltipFor(ids)}
+        >
+          {nf(count)}
+        </span>
+        {reasons.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+            {reasons.slice(0, 3).map(([label, d]) => (
+              <span key={label} className="badge !text-[10px]" title={label}>{label.split(' ')[0]} {d.count}</span>
+            ))}
+            {reasons.length > 3 && <span className="text-[10px]" style={{ color: 'var(--ink-3)' }}>+{reasons.length - 3}</span>}
+          </div>
+        )}
+        {count > 0 && (
+          <button
+            onClick={() => downloadExcel(name || 'Total', type, ids)}
+            className="absolute right-1 top-1 hidden rounded-[6px] p-1 group-hover/cell:block"
+            style={{ background: 'var(--surface)', border: '1px solid var(--line)', color: 'var(--ink-3)' }}
+            title="Télécharger la liste (CSV)" aria-label="Télécharger la liste"
           >
-            {(count || 0).toLocaleString()}
-          </span>
-          
-          {type === 'Entrants' && reasonsList.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-1 mt-1 max-w-[150px]">
-              {reasonsList.slice(0, 3).map(([label, data]: [string, any]) => (
-                <span key={label} className="text-[8px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-sm font-medium border border-blue-100/50 whitespace-nowrap" title={label}>
-                  {label.split(' ')[0]}: {data.count}
-                </span>
-              ))}
-              {reasonsList.length > 3 && <span className="text-[8px] text-slate-400">+{reasonsList.length - 3}</span>}
-            </div>
-          )}
-
-          {count > 0 && (
-            <button 
-              onClick={() => downloadExcel(item.name || 'Total', type, ids)}
-              className="opacity-0 group-hover/cell:opacity-100 p-1 hover:bg-white/50 rounded-md transition-all text-[10px] text-slate-400 hover:text-blue-600 flex items-center gap-1"
-              title="Télécharger la liste (Excel/CSV)"
-            >
-              📥 <span className="font-bold">EXCEL</span>
-            </button>
-          )}
-        </div>
+            <Download size={12} />
+          </button>
+        )}
       </td>
     );
   };
 
-  const renderTotalCell = (count: number, ids: string[], type: string, closureReasons?: any) => {
-    const displayIds = ids?.slice(0, 30) || [];
-    const hasMore = ids?.length > 30;
-    
-    let tooltipText = displayIds.join(', ') + (hasMore ? `... (+${ids.length - 30})` : '');
-    
-    const reasonsList = closureReasons ? Object.entries(closureReasons)
-      .filter(([, data]: [string, any]) => data.count > 0)
-      .sort((a: any, b: any) => b[1].count - a[1].count)
-      : [];
-
-    return (
-      <td className={`px-2 py-1.5 text-center border-l border-white/10 bg-white/5 group/cell relative ${type === 'Total_Entrants' ? 'w-[100px]' : ''}`}>
-        <div className="flex flex-col items-center justify-center gap-1">
-          <span 
-            className="text-xl font-black cursor-help transition-transform hover:scale-110 whitespace-pre-line"
-            title={tooltipText}
-          >
-            {(count || 0).toLocaleString()}
-          </span>
-
-          {reasonsList.length > 0 && (
-            <div className="flex flex-wrap justify-center gap-1 mt-1 max-w-[200px]">
-              {reasonsList.slice(0, 5).map(([label, data]: [string, any]) => (
-                <span key={label} className="text-[9px] bg-white/20 text-white px-2 py-0.5 rounded-md font-bold border border-white/10 whitespace-nowrap" title={label}>
-                  {label.split(' ')[0]}: {data.count}
-                </span>
-              ))}
-              {reasonsList.length > 5 && <span className="text-[9px] text-white/60">+{reasonsList.length - 5}</span>}
-            </div>
-          )}
-
-          {count > 0 && (
-            <button 
-              onClick={() => downloadExcel('Total_Direction', type, ids)}
-              className="opacity-0 group-hover/cell:opacity-100 p-1 bg-white/20 hover:bg-white/40 rounded-md transition-all text-[9px] text-white flex items-center gap-1"
-            >
-              📥 <span className="font-bold">EXCEL</span>
-            </button>
-          )}
-        </div>
-      </td>
-    );
-  };
+  const level = selectedPole === 'all' ? 0 : selectedDga === 'all' ? 1 : selectedDir === 'all' ? 2 : 3;
+  const firstColLabel = ['Collectivité / Pôles', 'Pôle / DGA', 'DGA / Directions', 'Direction / Services'][level];
+  const totalName = level === 0 ? 'Ivry-sur-Seine' : level === 1 ? selectedPole : level === 2 ? selectedDga : selectedDir;
+  const rows = itemsWithCounts.filter(item => showPeople || item.type !== 'Personne');
+  const t = currentTotalData;
 
   return (
-    <div className="p-8 max-w-[100%] mx-auto space-y-8 animate-fade-in">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            Entrants/Sortants
-            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full uppercase tracking-tighter">FLUX</span>
-          </h1>
-          <p className="text-slate-500">Analyse détaillée des flux entrants et sortants par direction</p>
-        </div>
-        <div className="flex gap-4">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
-             <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative">
-                   <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={showPeople} 
-                      onChange={(e) => setShowPeople(e.target.checked)} 
-                   />
-                   <div className="w-10 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </div>
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-slate-600 transition-colors">Afficher les personnes</span>
-             </label>
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-1 min-w-[140px]">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Année d'analyse</label>
-            <select 
-              value={year} 
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 outline-none font-bold text-blue-900 transition-all cursor-pointer"
-            >
+    <div className="page animate-fade-in">
+      <PageHeader
+        title="Entrants / Sortants"
+        subtitle="Flux de courrier par pôle, DGA, direction et service."
+        actions={
+          <>
+            <label className="flex cursor-pointer items-center gap-2 text-sm" style={{ color: 'var(--ink-2)' }}>
+              <input type="checkbox" checked={showPeople} onChange={(e) => setShowPeople(e.target.checked)} />
+              Afficher les personnes
+            </label>
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="select !w-auto" aria-label="Année">
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-          </div>
-        </div>
-      </div>
+            <button onClick={() => setRefreshTick(n => n + 1)} className="btn btn-secondary" disabled={loading} title="Retélécharger les données depuis Elise">
+              <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Actualiser
+            </button>
+          </>
+        }
+      />
 
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 overflow-visible">
-        <div className="w-full md:w-80 flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Pôle</label>
-          <select 
-            value={selectedPole} 
+      {/* Filtres */}
+      <div className="card card-pad grid gap-4 md:grid-cols-3">
+        <div>
+          <label className="label">Pôle</label>
+          <select
+            value={selectedPole}
             onChange={(e) => { setSelectedPole(e.target.value); setSelectedDga('all'); setSelectedDir('all'); }}
-            className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 outline-none font-bold text-slate-800 transition-all cursor-pointer h-12"
+            className="select"
           >
-            <option value="all">-- Toute la collectivité --</option>
-            {poles.map((p: any) => (
-              <option key={p.name} value={p.name}>{p.name} ({(p.countEnt || 0).toLocaleString()})</option>
-            ))}
+            <option value="all">Toute la collectivité</option>
+            {poles.map((p: any) => <option key={p.name} value={p.name}>{p.name} ({nf(p.countEnt)})</option>)}
           </select>
         </div>
-
-        <div className="w-full md:w-80 flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">DGA / ADJOINT</label>
-          <select 
+        <div>
+          <label className="label">DGA / Adjoint</label>
+          <select
             disabled={selectedPole === 'all'}
-            value={selectedDga} 
+            value={selectedDga}
             onChange={(e) => { setSelectedDga(e.target.value); setSelectedDir('all'); }}
-            className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 outline-none font-bold text-slate-800 transition-all cursor-pointer h-12 disabled:opacity-50"
+            className="select"
           >
-            <option value="all">-- Tous les DGA / Adjoints --</option>
-            {dgas.map((d: any) => (
-              <option key={d.name} value={d.name}>
-                {d.name} ({(d.countEnt || 0).toLocaleString()})
-              </option>
-            ))}
+            <option value="all">Tous les DGA / adjoints</option>
+            {dgas.map((d: any) => <option key={d.name} value={d.name}>{d.name} ({nf(d.countEnt)})</option>)}
           </select>
         </div>
-
-        <div className="w-full md:w-80 flex flex-col gap-1">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Direction</label>
-          <select 
-            disabled={selectedDga === 'all'}
-            value={selectedDir} 
-            onChange={(e) => setSelectedDir(e.target.value)}
-            className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-600 outline-none font-bold text-slate-800 transition-all cursor-pointer h-12 disabled:opacity-50"
-          >
-            <option value="all">-- Toutes les directions --</option>
-            {directions.map((dir: any) => (
-              <option key={dir.name} value={dir.name}>
-                {dir.name} ({(dir.countEnt || 0).toLocaleString()})
-              </option>
-            ))}
+        <div>
+          <label className="label">Direction</label>
+          <select disabled={selectedDga === 'all'} value={selectedDir} onChange={(e) => setSelectedDir(e.target.value)} className="select">
+            <option value="all">Toutes les directions</option>
+            {directions.map((dir: any) => <option key={dir.name} value={dir.name}>{dir.name} ({nf(dir.countEnt)})</option>)}
           </select>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden transition-all duration-500">
+      {/* Tableau */}
+      <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1400px]">
+          <table className="w-full min-w-[1100px] border-collapse text-sm">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th rowSpan={2} className="px-6 py-2 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] w-[250px]">
-                  {selectedPole === 'all' ? 'Collectivité / Pôles' : (selectedDga === 'all' ? 'Pôle / DGA' : (selectedDir === 'all' ? 'DGA / Directions' : 'Direction / Services'))}
-                </th>
-                <th colSpan={7} className="px-4 py-3 text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] text-center border-l border-slate-100/50 bg-blue-50/20">
-                  FLUX ENTRANTS (ENT)
-                </th>
-                <th rowSpan={2} className="px-6 py-2 text-[10px] font-black text-amber-600 uppercase tracking-[0.2em] text-center border-l border-slate-100/50 bg-amber-50/10">
-                  SORTANTS (SOR)
-                </th>
+              <tr style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)' }}>
+                <th rowSpan={2} className="w-[280px] px-5 py-3 text-left text-xs font-medium" style={{ color: 'var(--ink-3)' }}>{firstColLabel}</th>
+                <th colSpan={7} className="border-l px-3 py-2 text-center text-xs font-semibold" style={{ color: 'var(--brand-ink)' }}>Flux entrants</th>
+                <th rowSpan={2} className="border-l px-3 py-3 text-center text-xs font-semibold" style={{ color: 'var(--warn)' }}>Sortants</th>
               </tr>
-              <tr className="bg-slate-50/30 border-b border-slate-100">
-                <th className="px-2 py-2 text-[9px] font-black text-blue-800 uppercase text-center border-l border-slate-100/50 bg-blue-100/10 w-[100px]">TOTAL ENT</th>
-                <th className="px-4 py-2 text-[9px] font-black text-indigo-600 uppercase text-center border-l border-slate-100/30 bg-indigo-50/5">MUNI (Tot)</th>
-                <th className="px-4 py-2 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Mail)</th>
-                <th className="px-4 py-2 text-[9px] font-black text-indigo-500 uppercase text-center border-l border-slate-100/20">MUNI (Pap)</th>
-                <th className="px-4 py-2 text-[9px] font-black text-cyan-600 uppercase text-center border-l border-slate-100/30 bg-cyan-50/5">AUTRES (Tot)</th>
-                <th className="px-4 py-2 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Mail)</th>
-                <th className="px-4 py-2 text-[9px] font-black text-cyan-500 uppercase text-center border-l border-slate-100/20">AUTRES (Pap)</th>
+              <tr style={{ background: 'var(--surface-muted)', borderBottom: '1px solid var(--line)' }}>
+                {['Total', 'Muni', 'Muni mail', 'Muni papier', 'Autres', 'Autres mail', 'Autres papier'].map((h, i) => (
+                  <th key={h} className={`px-3 py-2 text-center text-[11px] font-medium ${i === 0 ? 'border-l' : ''}`} style={{ color: 'var(--ink-3)' }}>{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {/* Main Total Row (Global or Direction) */}
-              <tr className="border-b border-slate-100 bg-blue-600 text-white shadow-lg relative z-10">
-                <td className="px-6 py-1.5">
+              {/* Ligne de total */}
+              <tr style={{ background: 'var(--brand-soft)', borderBottom: '1px solid var(--brand-line)' }}>
+                <td className="px-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-white text-sm font-bold backdrop-blur-md">
-                      {selectedPole === 'all' ? '🏛️' : (selectedDga === 'all' ? 'P' : (selectedDir === 'all' ? 'DGA' : 'D'))}
+                    <span className="h-8 w-1 rounded-full" style={{ background: 'var(--brand)' }} />
+                    <div>
+                      <p className="max-w-[220px] truncate text-sm font-semibold" style={{ color: 'var(--brand-ink)' }} title={totalName}>{totalName}</p>
+                      <p className="text-xs" style={{ color: 'var(--ink-3)' }}>Total</p>
                     </div>
-                    <span className="text-sm font-black tracking-tight uppercase truncate max-w-[200px]">
-                      {selectedPole === 'all' ? 'Ivry-sur-Seine' : (selectedDga === 'all' ? selectedPole : (selectedDir === 'all' ? selectedDga : selectedDir))}
-                    </span>
                   </div>
                 </td>
-                {renderTotalCell(currentTotalData.countEnt, currentTotalData.idsEnt, 'Total_Entrants', currentTotalData.closureReasons)}
-                {renderTotalCell(currentTotalData.entMuniTotal, currentTotalData.idsMuniTotal, 'Muni_Total')}
-                {renderTotalCell(currentTotalData.entMuniMail, currentTotalData.idsMuniMail, 'Muni_Mail')}
-                {renderTotalCell(currentTotalData.entMuniPapier, currentTotalData.idsMuniPapier, 'Muni_Papier')}
-                {renderTotalCell(currentTotalData.entOtherTotal, currentTotalData.idsOtherTotal, 'Autres_Total')}
-                {renderTotalCell(currentTotalData.entOtherMail, currentTotalData.idsOtherMail, 'Autres_Mail')}
-                {renderTotalCell(currentTotalData.entOtherPapier, currentTotalData.idsOtherPapier, 'Autres_Papier')}
-                {renderTotalCell(currentTotalData.countSor, currentTotalData.idsSor, 'Sortants')}
+                <Cell head name="Total" count={t.countEnt} ids={t.idsEnt} type="Total_Entrants" tone="brand" reasons={reasonsOf(t.closureReasons) as any} />
+                <Cell head name="Total" count={t.entMuniTotal} ids={t.idsMuniTotal} type="Muni_Total" tone="brand" />
+                <Cell head name="Total" count={t.entMuniMail} ids={t.idsMuniMail} type="Muni_Mail" tone="brand" />
+                <Cell head name="Total" count={t.entMuniPapier} ids={t.idsMuniPapier} type="Muni_Papier" tone="brand" />
+                <Cell head name="Total" count={t.entOtherTotal} ids={t.idsOtherTotal} type="Autres_Total" tone="brand" />
+                <Cell head name="Total" count={t.entOtherMail} ids={t.idsOtherMail} type="Autres_Mail" tone="brand" />
+                <Cell head name="Total" count={t.entOtherPapier} ids={t.idsOtherPapier} type="Autres_Papier" tone="brand" />
+                <Cell head name="Total" count={t.countSor} ids={t.idsSor} type="Sortants" tone="warn" />
               </tr>
-              {/* List of items */}
-              {itemsWithCounts.filter(item => showPeople || item.type !== 'Personne').map((item: any) => (
-                <tr key={item.name} className="border-b border-slate-50 group hover:bg-slate-50/80 transition-all">
-                  <td className="px-6 py-0.5 pl-12">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${selectedDir === 'all' ? 'bg-blue-400' : 'bg-slate-300'} group-hover:scale-125 transition-transform`}></div>
-                          <span className={`text-[11px] font-bold tracking-tight group-hover:text-slate-900 transition-colors ${selectedDir === 'all' ? 'text-slate-800' : 'text-slate-600'} truncate max-w-[200px]`}>
-                          {item.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 ml-3.5">
-                        <span className={`text-[8px] font-bold uppercase ${item.type === 'Personne' ? 'text-amber-600 bg-amber-50' : 'text-slate-400 bg-slate-50'} px-1 rounded-sm w-fit`}>
-                          {item.type || 'Entité'}
-                        </span>
-                        {item.dga && item.dga !== 'Autres / Non classés' && (
-                            <span className="text-[8px] font-medium text-slate-400 italic">
-                                ({item.dga})
-                            </span>
-                        )}
-                      </div>
+
+              {/* Lignes */}
+              {rows.map((item: any) => (
+                <tr key={item.name} className="transition-colors hover:bg-[var(--surface-muted)]" style={{ borderBottom: '1px solid var(--line)' }}>
+                  <td className="px-5 py-2.5">
+                    <p className="max-w-[240px] truncate text-[13.5px] font-medium" title={item.name}>{item.name}</p>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      {item.type === 'Personne' && <span className="badge badge-warn !text-[10px]">Personne</span>}
+                      {item.dga && item.dga !== 'Autres / Non classés' && (
+                        <span className="truncate text-[11px]" style={{ color: 'var(--ink-3)' }}>{item.dga}</span>
+                      )}
                     </div>
                   </td>
-                  {renderCell(item, item.countEnt, item.idsEnt, 'Entrants', 'bg-blue-50/5', 'text-blue-700', true)}
-                  {renderCell(item, item.entMuniTotal, item.idsMuniTotal, 'Muni_Total', '', 'text-indigo-700/80')}
-                  {renderCell(item, item.entMuniMail, item.idsMuniMail, 'Muni_Mail', '', 'text-indigo-600/60')}
-                  {renderCell(item, item.entMuniPapier, item.idsMuniPapier, 'Muni_Papier', '', 'text-indigo-600/60')}
-                  {renderCell(item, item.entOtherTotal, item.idsOtherTotal, 'Autres_Total', '', 'text-cyan-700/80')}
-                  {renderCell(item, item.entOtherMail, item.idsOtherMail, 'Autres_Mail', '', 'text-cyan-600/60')}
-                  {renderCell(item, item.entOtherPapier, item.idsOtherPapier, 'Autres_Papier', '', 'text-cyan-600/60')}
-                  {renderCell(item, item.countSor, item.idsSor, 'Sortants', 'bg-amber-50/5', 'text-amber-700/80', true)}
+                  <Cell strong name={item.name} count={item.countEnt} ids={item.idsEnt} type="Entrants" tone="brand" reasons={reasonsOf(item.closureReasons) as any} />
+                  <Cell name={item.name} count={item.entMuniTotal} ids={item.idsMuniTotal} type="Muni_Total" />
+                  <Cell name={item.name} count={item.entMuniMail} ids={item.idsMuniMail} type="Muni_Mail" />
+                  <Cell name={item.name} count={item.entMuniPapier} ids={item.idsMuniPapier} type="Muni_Papier" />
+                  <Cell name={item.name} count={item.entOtherTotal} ids={item.idsOtherTotal} type="Autres_Total" />
+                  <Cell name={item.name} count={item.entOtherMail} ids={item.idsOtherMail} type="Autres_Mail" />
+                  <Cell name={item.name} count={item.entOtherPapier} ids={item.idsOtherPapier} type="Autres_Papier" />
+                  <Cell strong name={item.name} count={item.countSor} ids={item.idsSor} type="Sortants" tone="warn" />
                 </tr>
               ))}
-              
-              {itemsWithCounts.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={4} className="px-8 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2 opacity-40">
-                      <span className="text-4xl">📁</span>
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-400">Aucune donnée trouvée en {year}</p>
-                    </div>
-                  </td>
-                </tr>
+
+              {rows.length === 0 && !loading && (
+                <tr><td colSpan={9}><EmptyState icon={<ArrowLeftRight size={20} />} title={`Aucune donnée en ${year}`} hint="Modifiez les filtres ou l'année." /></td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {loading && (
+          <div className="flex items-center justify-center gap-3 py-10 text-sm" style={{ color: 'var(--ink-3)', borderTop: '1px solid var(--line)' }}>
+            <span className="spinner" /> Chargement des données…
+          </div>
+        )}
       </div>
-      
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-12 gap-4">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      )}
     </div>
   );
 }
