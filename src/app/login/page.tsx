@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@elise.local');
-  const [password, setPassword] = useState('admin123'); // Default for dev
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -52,13 +52,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Email</label>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Identifiant Ville (AD) ou e-mail</label>
             <input 
-              type="email" 
+              type="text" 
+              autoComplete="username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              placeholder="votre@email.fr"
+              placeholder="ex. mchevalier"
               required
             />
           </div>

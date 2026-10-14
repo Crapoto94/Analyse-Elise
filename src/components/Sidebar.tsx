@@ -66,6 +66,12 @@ export default function Sidebar() {
       href: '/entrants-sortants',
       description: 'Analyse des flux par direction',
     },
+    {
+      label: 'Envoi des stats',
+      icon: '✉️',
+      href: '/envoi-stats',
+      description: 'PDF mensuels par e-mail',
+    },
   ];
 
   if (session?.role === 'ADMIN') {

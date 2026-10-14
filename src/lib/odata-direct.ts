@@ -324,7 +324,10 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const nextM = m === 12 ? 1 : m + 1;
     const nextY = m === 12 ? year + 1 : year;
     const end = `${nextY}-${nextM.toString().padStart(2, '0')}-01T00:00:00Z`;
-    taskFilterStr = `RequestedDate ge ${start} and RequestedDate lt ${end}`;
+    // Les tâches ne sont PAS bornées à la fin du mois : un courrier créé en septembre peut être réaffecté
+    // plus tard (tâche demandée en octobre). Comme dans la vue annuelle, l'attribution doit tenir compte
+    // de toutes ses tâches, sinon il retombe sur son créateur/direction d'origine.
+    taskFilterStr = `RequestedDate ge ${start}`;
     docFilterStr = `CreatedDate ge ${start} and CreatedDate lt ${end} and (startswith(DocumentIdentifier, 'ENT') or startswith(DocumentIdentifier, 'SOR')) and StateId ne 46`;
   }
   
@@ -365,6 +368,8 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
   const dgaMap = new Map<string, any>();
   const dirMap = new Map<string, any>();
   const svcMap = new Map<string, any>();
+  // Services regroupés par direction (clé: direction -> service) pour l'envoi des stats
+  const svcByDirMap = new Map<string, Map<string, any>>();
 
   const statusMap = new Map(allStatusesRaw.map((s: any) => [Number(s.Id), s.LabelFrFr]));
   const closureReasonMap = new Map(allClosureReasonsRaw.map((r: any) => [Number(r.Id), r.LabelFrFr]));
@@ -471,6 +476,7 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
     const docDgas = new Set<string>();
     const docDirs = new Set<string>();
     const docSvcs = new Set<string>();
+    const docDirSvcs = new Set<string>();
 
     bestSeIds.forEach(sid => {
        const p = pmFull.get(sid);
@@ -482,6 +488,10 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
           const svc = p?.Level5?.trim();
 
           docPoles.add(pole);
+          {
+            const svcTypeAll = p?.Level5 ? 'Entité' : (elementTypesMap.get(sid) === 'USER' ? 'Personne' : 'Entité');
+            docDirSvcs.add(JSON.stringify({ dir, name: p?.Level5?.trim() || elementNamesMap.get(sid) || '(Affectations Directes Direction)', type: svcTypeAll }));
+          }
           if (!filters || !filters.pole || filters.pole === 'all' || pole === filters.pole) {
              docDgas.add(dga);
              if (!filters || !filters.dga || filters.dga === 'all' || dga === filters.dga) {
@@ -558,6 +568,11 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
        const d = JSON.parse(js);
        addToMap(svcMap, d.name, { type: d.type });
     });
+    docDirSvcs.forEach(js => {
+       const d = JSON.parse(js);
+       if (!svcByDirMap.has(d.dir)) svcByDirMap.set(d.dir, new Map());
+       addToMap(svcByDirMap.get(d.dir)!, d.name, { type: d.type });
+    });
 
     // Fallback if truly not mapped
     if (!wasMapped) {
@@ -625,6 +640,11 @@ export async function fetchDirectHierarchy(year: number, filters?: any) {
         return a.name.localeCompare(b.name);
     }),
     services: Array.from(svcMap.entries()).map(formatEntry).sort((a,b) => a.name.localeCompare(b.name)),
+    // Uniquement à la demande (envoi des stats) : alourdit la réponse de ~20 %
+    servicesByDir: !filters?.withServicesByDir ? {} : Object.fromEntries(Array.from(svcByDirMap.entries()).map(([dir, m]) => [
+      dir,
+      Array.from(m.entries()).map(formatEntry).sort((a,b) => a.name.localeCompare(b.name))
+    ])),
     statuses: allStatusesRaw.map((s: any) => ({ id: s.Id, name: s.LabelFrFr }))
   };
 }

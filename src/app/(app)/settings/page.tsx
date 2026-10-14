@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ODataClient, ODataConfig } from '@/lib/odata';
+import RattachementTab from './RattachementTab';
 import { 
   Database, 
   Users, 
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'sql' | 'users' | 'config' | 'audit'>('sql');
+  const [activeTab, setActiveTab] = useState<'sql' | 'users' | 'config' | 'audit' | 'rattachement'>('sql');
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -48,6 +49,7 @@ export default function SettingsPage() {
     { id: 'sql', label: 'Base de données', icon: '🗄️' },
     { id: 'users', label: 'Utilisateurs', icon: '👥' },
     { id: 'config', label: 'Connexion OData', icon: '☁️' },
+    { id: 'rattachement', label: 'Rattachement directions', icon: '🔗' },
     { id: 'audit', label: 'Audit API', icon: '📋' }
   ];
 
@@ -88,6 +90,7 @@ export default function SettingsPage() {
           {activeTab === 'sql' && <RestoredSqlExplorer />}
           {activeTab === 'users' && <UsersTab />}
           {activeTab === 'config' && <ConfigTab />}
+          {activeTab === 'rattachement' && <RattachementTab />}
           {activeTab === 'audit' && <AuditLogsTab />}
         </div>
       </div>
