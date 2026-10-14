@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { BarChart3, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -36,69 +37,95 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-6 relative overflow-hidden">
-      {/* Background blobs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-400/20 rounded-full blur-3xl animate-pulse"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-400/20 rounded-full blur-3xl animate-pulse delay-1000"></div>
-
-      <div className="w-full max-w-md bg-white/70 dark:bg-gray-800/70 backdrop-blur-xl p-10 rounded-3xl shadow-2xl border border-white/20 dark:border-gray-700/50 z-10 transition-all">
-        <div className="text-center mb-10">
-          <div className="inline-block p-4 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200 dark:shadow-none mb-4 bg-gradient-to-br from-blue-500 to-indigo-600">
-             <span className="text-3xl">🛡️</span>
+    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+      {/* Panneau de marque */}
+      <aside
+        className="relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex"
+        style={{ background: 'linear-gradient(160deg, #14398f 0%, #1f5eea 60%, #3b7bff 100%)' }}
+      >
+        <div className="flex items-center gap-3">
+          <img src="/logo.jpg" alt="" className="h-11 w-11 rounded-[10px] bg-white object-contain p-0.5" />
+          <div className="leading-tight">
+            <p className="text-base font-semibold">Ville d&apos;Ivry-sur-Seine</p>
+            <p className="text-sm text-white/70">Direction des Systèmes d&apos;Information</p>
           </div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Elise Analytics</h1>
-          <p className="text-gray-500 dark:text-gray-400 font-medium mt-2">Connectez-vous pour accéder au tableau de bord</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Identifiant Ville (AD) ou e-mail</label>
-            <input 
-              type="text" 
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              placeholder="ex. mchevalier"
-              required
-            />
+        <div className="max-w-md">
+          <div className="mb-6 grid h-12 w-12 place-items-center rounded-[12px] bg-white/15 backdrop-blur">
+            <BarChart3 size={24} />
+          </div>
+          <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white">
+            Le courrier de la Ville, en chiffres.
+          </h1>
+          <p className="mt-4 text-base leading-relaxed text-white/75">
+            Flux entrants et sortants, délais de traitement et activité par direction, à partir des données Elise.
+          </p>
+        </div>
+
+        <p className="text-sm text-white/60">Statistiques Elise</p>
+
+        {/* Motif décoratif */}
+        <svg className="pointer-events-none absolute -bottom-24 -right-24 opacity-[0.07]" width="520" height="520" viewBox="0 0 520 520" fill="none" aria-hidden>
+          {[80, 140, 200, 260].map(r => <circle key={r} cx="260" cy="260" r={r} stroke="white" strokeWidth="2" />)}
+        </svg>
+      </aside>
+
+      {/* Formulaire */}
+      <main className="flex items-center justify-center p-6 sm:p-12" style={{ background: 'var(--surface)' }}>
+        <div className="w-full max-w-sm">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <img src="/logo.jpg" alt="" className="h-10 w-10 rounded-[10px] object-contain" style={{ border: '1px solid var(--line)' }} />
+            <p className="text-base font-semibold">Statistiques Elise</p>
           </div>
 
-          <div>
-            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">Mot de passe</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-2xl px-5 py-4 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <h2 className="text-[26px] font-semibold">Connexion</h2>
+          <p className="mt-1.5 text-sm" style={{ color: 'var(--ink-3)' }}>
+            Utilisez votre identifiant Ville (compte Windows) ou votre e-mail.
+          </p>
 
-          {error && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-bold rounded-xl border border-red-100 dark:border-red-900/30">
-              {error}
+          <form onSubmit={handleLogin} className="mt-8 space-y-5">
+            <div>
+              <label htmlFor="identifiant" className="label">Identifiant Ville (AD) ou e-mail</label>
+              <input
+                id="identifiant"
+                type="text"
+                autoComplete="username"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input !py-2.5"
+                placeholder="ex. mchevalier"
+                required
+              />
             </div>
-          )}
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-xl shadow-blue-100 dark:shadow-none transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-            ) : (
-              "Se Connecter"
-            )}
-          </button>
-        </form>
+            <div>
+              <label htmlFor="mot-de-passe" className="label">Mot de passe</label>
+              <input
+                id="mot-de-passe"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input !py-2.5"
+                placeholder="••••••••"
+                required
+              />
+            </div>
 
-        <p className="mt-8 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest opacity-50">
-          OData BI Gateway v0.1.59
-        </p>
-      </div>
+            {error && <div role="alert" className="alert alert-danger">{error}</div>}
+
+            <button type="submit" disabled={loading} className="btn btn-primary w-full !py-2.5">
+              {loading ? <span className="spinner !h-4 !w-4 !border-white/40 !border-t-white" /> : 'Se connecter'}
+            </button>
+          </form>
+
+          <p className="mt-8 flex items-center gap-2 text-xs" style={{ color: 'var(--ink-3)' }}>
+            <ShieldCheck size={14} /> Accès réservé aux agents autorisés.
+          </p>
+        </div>
+      </main>
     </div>
   );
 }
